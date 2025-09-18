@@ -13,6 +13,16 @@ class QuantumNativeTrainer:
         # Use quantum-aware optimizer
         self.quantum_optimizer = qml.AdamOptimizer(stepsize=learning_rate)
     
+    def save_params(self, params: dict, filepath: str):
+        """Save quantum circuit parameters to disk"""
+        numpy_params = {k: np.array(v) for k, v in params.items()}
+        np.savez(filepath, **numpy_params)
+    
+    def load_params(self, filepath: str):
+        """Load quantum circuit parameters from disk"""
+        data = np.load(filepath)
+        return {k: pnp.array(data[k], requires_grad=True) for k in data.files}
+    
     def train_pure_quantum_cnn(self, model: PureQuantumNativeCNN, 
                               X_train: np.ndarray, y_train: np.ndarray,
                               X_test: np.ndarray, y_test: np.ndarray) -> PureQuantumNativeCNN:
@@ -97,6 +107,11 @@ class QuantumNativeTrainer:
         
         # Restore best quantum parameters
         model.quantum_params = best_quantum_params
+        
+        # Save parameters to disk
+        self.save_params(model.quantum_params, 'quantum_model_params.npz')
+        print("💾 Saved trained quantum model parameters to 'quantum_model_params.npz'")
+        
         print(f"\n🎯 Best Quantum Test Accuracy: {best_accuracy:.3f}")
         
         return model
