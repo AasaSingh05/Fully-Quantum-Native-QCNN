@@ -9,3 +9,6 @@ QCNN/*/__pycache__
 #for testing and checking modules and snippets
 implementationTests/
 implementationTests/*
+
+#Results
+Results/*
