@@ -2,3 +2,6 @@
 QCNN/__pycache__
 QCNN/*/__pycache__
 *.pyc
+
+#for testing and checking modules and snippets
+testing.py
