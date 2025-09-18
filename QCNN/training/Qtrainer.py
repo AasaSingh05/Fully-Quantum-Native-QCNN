@@ -2,6 +2,7 @@ import pennylane as qml
 import pennylane.numpy as pnp
 import numpy as np
 import time
+import sys
 from QCNN.models import PureQuantumNativeCNN
 
 class QuantumNativeTrainer:
@@ -23,8 +24,9 @@ class QuantumNativeTrainer:
         
         # Flatten initial parameters for optimizer
         params_flat = model._flatten_params(model.quantum_params)
+        n_epochs = model.config.n_epochs
         
-        for epoch in range(model.config.n_epochs):
+        for epoch in range(n_epochs):
             epoch_start = time.time()
             
             # Shuffle quantum training data
@@ -72,14 +74,26 @@ class QuantumNativeTrainer:
                 best_accuracy = test_accuracy
                 best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
             
-            # Report progress periodically
-            epoch_time = time.time() - epoch_start
-            if epoch % 10 == 0 or epoch == model.config.n_epochs - 1:
-                print(f"⚡ Quantum Epoch {epoch:3d}: "
-                      f"Loss={avg_loss:.4f}, "
-                      f"Train={train_accuracy:.3f}, "
-                      f"Test={test_accuracy:.3f}, "
-                      f"Time={epoch_time:.1f}s")
+            # Calculate training progress percentage and estimate remaining time
+            progress_percent = ((epoch + 1) / n_epochs) * 100
+            elapsed = time.time() - epoch_start
+            estimated_total = elapsed / ((epoch + 1) / n_epochs)
+            remaining = estimated_total - elapsed
+            
+            # Display progress on the same console line
+            sys.stdout.write(
+                f"\r⚡ Quantum Epoch {epoch+1}/{n_epochs} | "
+                f"Loss={avg_loss:.4f} | "
+                f"Train Acc={train_accuracy:.3f} | "
+                f"Test Acc={test_accuracy:.3f} | "
+                f"Progress={progress_percent:.1f}% | "
+                f"ETA={remaining:.1f}s"
+            )
+            sys.stdout.flush()
+            
+            # New line after last epoch
+            if epoch == n_epochs - 1:
+                print()
         
         # Restore best quantum parameters
         model.quantum_params = best_quantum_params

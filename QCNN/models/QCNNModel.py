@@ -29,6 +29,7 @@ class PureQuantumNativeCNN:
     def _initialize_quantum_parameters(self) -> dict[str, pnp.ndarray]:
         """Initialize all quantum circuit parameters"""
         pnp.random.seed(42)
+
         params = {}
 
         #convolutional layer
@@ -142,19 +143,21 @@ class PureQuantumNativeCNN:
         Pure quantum loss computation
         Uses quantum fidelity-based loss
         """
+        # Use pennylane.numpy to handle autograd gradient types properly
         quantum_predictions = []
         for x in X_batch:
             quantum_output = self.quantum_predict_single(x)
             quantum_predictions.append(quantum_output)
         
-        quantum_predictions = np.array(quantum_predictions)
+        quantum_predictions = pnp.array(quantum_predictions)
+        y_batch = pnp.array(y_batch)
         
-        # Quantum-inspired loss: minimize distance in Hilbert space
-        quantum_loss = np.mean((quantum_predictions - y_batch) ** 2)
+        # Quantum-inspired loss: minimize squared error of output vs label
+        quantum_loss = pnp.mean((quantum_predictions - y_batch) ** 2)
         
-        # Quantum regularization: penalize large rotations
+        # Quantum regularization: penalize large rotation parameters (L2 penalty)
         quantum_penalty = 0
         for param_set in self.quantum_params.values():
-            quantum_penalty += np.sum(param_set ** 2)
+            quantum_penalty += pnp.sum(param_set ** 2)
         
         return quantum_loss + 0.001 * quantum_penalty
