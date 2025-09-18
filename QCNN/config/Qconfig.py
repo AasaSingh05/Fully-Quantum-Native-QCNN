@@ -4,17 +4,17 @@ class QuantumNativeConfig:
     def __init__(self):
         # Data parameters
         self.image_size = 4  # 4x4 = 16 qubits
-        self.n_qubits = self.image_size ** 2
+        self.n_qubits = 2 #self.image_size ** 2
         
         # Pure quantum architecture parameters  
-        self.n_conv_layers = 2
+        self.n_conv_layers = 1 #2
         self.kernel_size = 2  # 2x2 quantum kernels
         self.encoding_type = 'amplitude'  # Quantum data encoding
         
         # Quantum training parameters
         self.learning_rate = 0.05
-        self.n_epochs = 80
-        self.batch_size = 16
+        self.n_epochs = 5 #80 
+        self.batch_size = 2 #16
         
         # Quantum device
         self.device = 'default.qubit'
