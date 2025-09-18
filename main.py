@@ -36,7 +36,7 @@ def main():
     # Step 2: Generate quantum dataset
     print("\n📊 Step 2: Generating Quantum Binary Dataset...")
     X_quantum, y_quantum = generate_quantum_binary_dataset(
-        n_samples=300, image_size=config.image_size
+        n_samples=50, image_size=config.image_size
     )
 
     # Split data
