@@ -1,8 +1,10 @@
 import numpy as np
 import pennylane as qml
+import pennylane.numpy as pnp
 from QCNN.config import QuantumNativeConfig 
 from QCNN.layers import QuantumNativeConvolution 
 from QCNN.encoding import PureQuantumEncoder 
+
 class PureQuantumNativeCNN:
     
     #constructor  
@@ -13,32 +15,65 @@ class PureQuantumNativeCNN:
         # Initialize pure quantum parameters
         self.quantum_params = self._initialize_quantum_parameters()
         
-        # Create pure quantum circuit
-        self.quantum_circuit = qml.QNode(self._pure_quantum_forward, self.device)
+        # Create pure quantum circuit with explicit QNode decorator for differentiation
+        @qml.qnode(self.device, diff_method="parameter-shift")
+        def quantum_circuit(x, flat_params):
+            # Unflatten parameters from flat vector
+            params = self._unflatten_params(flat_params)
+            return self._pure_quantum_forward(x, params)
+        self.quantum_circuit = quantum_circuit
         
         # Training metrics  
         self.training_history = {'loss': [], 'accuracy': []}
     
-    def _initialize_quantum_parameters(self) -> dict[str, np.ndarray]:
+    def _initialize_quantum_parameters(self) -> dict[str, pnp.ndarray]:
         """Initialize all quantum circuit parameters"""
-        np.random.seed(42)
+        pnp.random.seed(42)
         params = {}
-        
-        # Quantum convolution parameters
+
+        #convolutional layer
         conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
         n_windows = len(conv_windows)
         kernel_params = QuantumNativeConvolution.get_kernel_param_count()
+
+        for layer in range(self.config.n_conv_layers):
+            param_array = pnp.array(
+                np.random.normal(0, 0.1, (n_windows, kernel_params)), requires_grad=True
+            )
+            params[f'quantum_conv_{layer}'] = param_array
+
+        #pooling layer
+        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.1, 20), requires_grad=True)
+        
+        #Fully connected classifier layer
+        params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.1, 8), requires_grad=True)
+
+        return params
+    
+    def _flatten_params(self, params: dict[str, pnp.ndarray]) -> pnp.ndarray:
+        """Flatten dictionary of params into single vector"""
+        return pnp.concatenate([p.flatten() for p in params.values()])
+    
+    def _unflatten_params(self, flat_params: pnp.ndarray) -> dict[str, pnp.ndarray]:
+        """Unflatten flat vector back into dictionary of params"""
+        params = {}
+        idx = 0
+        
+        conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
+        n_windows = len(conv_windows)
+        kernel_params = QuantumNativeConvolution.get_kernel_param_count()
+        kernel_size = n_windows * kernel_params
         
         for layer in range(self.config.n_conv_layers):
-            params[f'quantum_conv_{layer}'] = np.random.normal(
-                0, 0.1, (n_windows, kernel_params)
-            )
+            size = kernel_size
+            params[f'quantum_conv_{layer}'] = flat_params[idx:idx+size].reshape((n_windows, kernel_params))
+            idx += size
         
-        # Quantum pooling parameters
-        params['quantum_pooling'] = np.random.normal(0, 0.1, 20)
+        params['quantum_pooling'] = flat_params[idx:idx+20]
+        idx += 20
         
-        # Final quantum classifier parameters
-        params['quantum_classifier'] = np.random.normal(0, 0.1, 8)
+        params['quantum_classifier'] = flat_params[idx:idx+8]
+        idx += 8
         
         return params
     
@@ -89,7 +124,8 @@ class PureQuantumNativeCNN:
     
     def quantum_predict_single(self, x: np.ndarray) -> float:
         """Pure quantum prediction for single sample"""
-        return self.quantum_circuit(x, self.quantum_params)
+        flat_params = self._flatten_params(self.quantum_params)
+        return self.quantum_circuit(x, flat_params)
     
     def quantum_predict_batch(self, X: np.ndarray) -> np.ndarray:
         """Pure quantum batch prediction"""

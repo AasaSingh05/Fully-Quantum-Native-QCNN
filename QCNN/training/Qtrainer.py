@@ -1,7 +1,9 @@
 import pennylane as qml
+import pennylane.numpy as pnp
 import numpy as np
 import time
 from QCNN.models import PureQuantumNativeCNN
+
 class QuantumNativeTrainer:
     """parameter-shift rule gradients"""
     
@@ -18,6 +20,9 @@ class QuantumNativeTrainer:
         
         best_accuracy = 0
         best_quantum_params = None
+        
+        # Flatten initial parameters for optimizer
+        params_flat = model._flatten_params(model.quantum_params)
         
         for epoch in range(model.config.n_epochs):
             epoch_start = time.time()
@@ -37,25 +42,24 @@ class QuantumNativeTrainer:
                 y_quantum_batch = y_shuffled[i:batch_end]
                 
                 # Define quantum cost function
-                def quantum_cost(quantum_params):
-                    old_params = model.quantum_params.copy()
-                    model.quantum_params = quantum_params
+                def quantum_cost(params):
+                    # Unflatten params for model usage
+                    model.quantum_params = model._unflatten_params(params)
                     loss = model.quantum_loss_function(X_quantum_batch, y_quantum_batch)
-                    model.quantum_params = old_params
                     return loss
                 
-                # Pure quantum parameter update using parameter-shift rule
-                model.quantum_params = self.quantum_optimizer.step(
-                    quantum_cost, model.quantum_params
-                )
+                # Pure quantum parameter update using parameter-shift rule optimizer
+                params_flat = self.quantum_optimizer.step(quantum_cost, params_flat)
                 
                 # Track quantum loss
-                batch_loss = model.quantum_loss_function(X_quantum_batch, y_quantum_batch)
+                batch_loss = quantum_cost(params_flat)
                 epoch_quantum_loss += batch_loss
                 n_quantum_batches += 1
             
-            # Quantum evaluation
             avg_loss = epoch_quantum_loss / n_quantum_batches
+            model.quantum_params = model._unflatten_params(params_flat)
+            
+            # Quantum evaluation
             train_accuracy = self._compute_quantum_accuracy(model, X_train[:50], y_train[:50])
             test_accuracy = self._compute_quantum_accuracy(model, X_test, y_test)
             
@@ -63,12 +67,12 @@ class QuantumNativeTrainer:
             model.training_history['loss'].append(avg_loss)
             model.training_history['accuracy'].append(test_accuracy)
             
-            # Save best quantum model
+            # Save best quantum model parameters
             if test_accuracy > best_accuracy:
                 best_accuracy = test_accuracy
                 best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
             
-            # Progress report
+            # Report progress periodically
             epoch_time = time.time() - epoch_start
             if epoch % 10 == 0 or epoch == model.config.n_epochs - 1:
                 print(f"⚡ Quantum Epoch {epoch:3d}: "
@@ -84,7 +88,7 @@ class QuantumNativeTrainer:
         return model
     
     def _compute_quantum_accuracy(self, model: PureQuantumNativeCNN, 
-                                 X: np.ndarray, y: np.ndarray) -> float:
+                                  X: np.ndarray, y: np.ndarray) -> float:
         """Compute quantum classification accuracy"""
         quantum_predictions = model.quantum_predict_batch(X)
         return np.mean(quantum_predictions == y)
