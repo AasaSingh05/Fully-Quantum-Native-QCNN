@@ -1,9 +1,7 @@
 import numpy as np
 import pennylane as qml
 
-class QuantumNativeConvolution:
-    """Pure quantum convolutional operations"""
-    
+class QuantumNativeConvolution:    
     @staticmethod
     def quantum_conv2d_kernel(params: np.ndarray, qubits:list[int]) -> None:
         """

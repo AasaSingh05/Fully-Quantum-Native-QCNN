@@ -3,7 +3,7 @@ import numpy as np
 import time
 from QCNN.models import PureQuantumNativeCNN
 class QuantumNativeTrainer:
-    """Pure quantum training - parameter-shift rule gradients"""
+    """parameter-shift rule gradients"""
     
     def __init__(self, learning_rate: float = 0.05):
         self.learning_rate = learning_rate
@@ -13,9 +13,6 @@ class QuantumNativeTrainer:
     def train_pure_quantum_cnn(self, model: PureQuantumNativeCNN, 
                               X_train: np.ndarray, y_train: np.ndarray,
                               X_test: np.ndarray, y_test: np.ndarray) -> PureQuantumNativeCNN:
-        """
-        Pure quantum training loop using parameter-shift rule
-        """
         print("\n🚀 Starting Pure Quantum Native Training")
         print("="*50)
         

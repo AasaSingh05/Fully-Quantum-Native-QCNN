@@ -1,9 +1,7 @@
 import numpy as np
 import pennylane as qml
 
-class PureQuantumEncoder:
-    """100% quantum data encoding strategies"""
-    
+class PureQuantumEncoder:    
     @staticmethod
     def amplitude_encoding(data: np.ndarray, wires: list[int]) -> None:
         """

@@ -1,8 +1,6 @@
 import numpy as np
 import pennylane as qml
 class QuantumNativePooling:
-    """Pure quantum pooling - no classical operations"""
-    
     @staticmethod
     def quantum_measurement_pooling(measure_qubits: list[int]) -> list[qml.measurements.ExpectationMP]:
         """

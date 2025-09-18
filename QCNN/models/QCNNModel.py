@@ -4,11 +4,8 @@ from QCNN.config import QuantumNativeConfig
 from QCNN.layers import QuantumNativeConvolution 
 from QCNN.encoding import PureQuantumEncoder 
 class PureQuantumNativeCNN:
-    """
-    100% Quantum Native CNN - Zero Classical Components
-    Every operation uses quantum mechanical principles
-    """
     
+    #constructor  
     def __init__(self, config: QuantumNativeConfig):
         self.config = config
         self.device = qml.device(config.device, wires=config.n_qubits)
@@ -46,10 +43,6 @@ class PureQuantumNativeCNN:
         return params
     
     def _pure_quantum_forward(self, x: np.ndarray, params: dict) -> float:
-        """
-        Pure quantum forward pass - 100% quantum operations
-        No classical neural network components anywhere
-        """
         all_qubits = list(range(self.config.n_qubits))
         
         # Step 1: Pure quantum data encoding
