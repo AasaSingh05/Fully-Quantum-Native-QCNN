@@ -1,5 +1,4 @@
-#Folders with pycache
+#pycache
 QCNN/__pycache__
 QCNN/*/__pycache__
-
 *.pyc
