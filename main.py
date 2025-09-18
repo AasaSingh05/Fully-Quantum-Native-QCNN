@@ -81,8 +81,12 @@ def main():
     print(f"   False Positives: {fp}")
     print(f"   False Negatives: {fn}")
 
-    # Plot training history
+    # Plot training history and save graphs
     try:
+        graphs_dir = os.path.join('Results', 'Graphs')
+        os.makedirs(graphs_dir, exist_ok=True)
+        graph_path = os.path.join(graphs_dir, 'quantum_training_results.png')
+
         plt.figure(figsize=(12, 4))
 
         plt.subplot(1, 2, 1)
@@ -100,8 +104,8 @@ def main():
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('quantum_training_results.png', dpi=150, bbox_inches='tight')
-        print("\n📊 Training plots saved as 'quantum_training_results.png'")
+        plt.savefig(graph_path, dpi=150, bbox_inches='tight')
+        print(f"\n📊 Training plots saved as '{graph_path}'")
     except Exception as e:
         print(f"\n⚠️  Plotting failed: {e}")
 

@@ -3,6 +3,7 @@ import pennylane.numpy as pnp
 import numpy as np
 import time
 import sys
+import os
 from QCNN.models import PureQuantumNativeCNN
 
 class QuantumNativeTrainer:
@@ -108,9 +109,13 @@ class QuantumNativeTrainer:
         # Restore best quantum parameters
         model.quantum_params = best_quantum_params
         
-        # Save parameters to disk
-        self.save_params(model.quantum_params, 'quantum_model_params.npz')
-        print("💾 Saved trained quantum model parameters to 'quantum_model_params.npz'")
+        # Ensure Results/Weights directory exists
+        weights_dir = os.path.join('Results', 'Weights')
+        os.makedirs(weights_dir, exist_ok=True)
+
+        weights_path = os.path.join(weights_dir, 'quantum_model_params.npz')
+        self.save_params(model.quantum_params, weights_path)
+        print(f"💾 Saved trained quantum model parameters to '{weights_path}'")
         
         print(f"\n🎯 Best Quantum Test Accuracy: {best_accuracy:.3f}")
         

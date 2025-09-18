@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple
 
-def generate_quantum_binary_dataset(n_samples: int = 400, 
+def generate_quantum_binary_dataset(n_samples: int = 100, 
                                    image_size: int = 4) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate synthetic dataset optimized for quantum advantage
