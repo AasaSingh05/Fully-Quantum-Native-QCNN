@@ -4,7 +4,7 @@ class QuantumNativeConfig:
     def __init__(self):
         # Data parameters
         self.image_size = 4  # 4x4 = 16 qubits
-        self.n_qubits = 2 #self.image_size ** 2
+        self.n_qubits = self.image_size ** 2
         
         # Pure quantum architecture parameters  
         self.n_conv_layers = 1 #2
@@ -17,8 +17,8 @@ class QuantumNativeConfig:
         self.batch_size = 2 #16
         
         # Quantum device
-        self.device = 'default.qubit'
+        self.device = 'default.qubit.jax'
         self.shots = None  # Exact quantum simulation
 
 config = QuantumNativeConfig()
-print(f"🔧 Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")
+print(f"🔧 Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers") 
