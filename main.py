@@ -20,8 +20,11 @@ from QCNN.models.QCNNModel import PureQuantumNativeCNN
 from QCNN.training.Qtrainer import QuantumNativeTrainer
 from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
 
+print("Starting main execution script...")  # Debug to monitor re-imports
+
 def main():
     """Main execution function"""
+    print("Entered main() function.")  # Debug print
 
     # Step 1: Configuration
     print("\n📋 Step 1: Initializing Quantum Configuration...")
@@ -112,6 +115,7 @@ def main():
     print("   • Quantum superposition: Parallel computation")
     print("   • Quantum interference: Amplitude cancellation")
     print("✅ Ready for quantum hardware deployment!\n")
+    print("Exiting main() function.")  # Debug print
     return trained_model, accuracy
 
 if __name__ == "__main__":
