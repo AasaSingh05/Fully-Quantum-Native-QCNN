@@ -17,7 +17,7 @@ class QuantumNativeConfig:
         self.batch_size = 2 #16
         
         # Quantum device
-        self.device = 'default.qubit.jax'
+        self.device = 'lightning.qubit'  
         self.shots = None  # Exact quantum simulation
 
 config = QuantumNativeConfig()
