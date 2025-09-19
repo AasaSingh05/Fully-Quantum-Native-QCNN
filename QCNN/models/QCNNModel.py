@@ -5,6 +5,7 @@ from QCNN.config import QuantumNativeConfig
 from QCNN.layers import QuantumNativeConvolution 
 from QCNN.encoding import PureQuantumEncoder 
 
+
 class PureQuantumNativeCNN:
     
     #constructor  
@@ -12,11 +13,14 @@ class PureQuantumNativeCNN:
         self.config = config
         self.device = qml.device(config.device, wires=config.n_qubits)
         
+        # Store number of qubits for parameter calculation
+        self.num_qubits = config.n_qubits
+        
         # Initialize pure quantum parameters
         self.quantum_params = self._initialize_quantum_parameters()
         
         # Create pure quantum circuit with explicit QNode decorator for differentiation
-        @qml.qnode(self.device, diff_method="parameter-shift")
+        @qml.qnode(self.device, interface='jax')
         def quantum_circuit(x, flat_params):
             # Unflatten parameters from flat vector
             params = self._unflatten_params(flat_params)
@@ -35,7 +39,9 @@ class PureQuantumNativeCNN:
         #convolutional layer
         conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
         n_windows = len(conv_windows)
-        kernel_params = QuantumNativeConvolution.get_kernel_param_count()
+        # Fix: pass the length of a window to get_kernel_param_count (parameters per kernel)
+        window_size = len(conv_windows[0]) 
+        kernel_params = QuantumNativeConvolution.get_kernel_param_count(window_size)
 
         for layer in range(self.config.n_conv_layers):
             param_array = pnp.array(
@@ -62,7 +68,9 @@ class PureQuantumNativeCNN:
         
         conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
         n_windows = len(conv_windows)
-        kernel_params = QuantumNativeConvolution.get_kernel_param_count()
+        # Fix: use window size here too
+        window_size = len(conv_windows[0]) 
+        kernel_params = QuantumNativeConvolution.get_kernel_param_count(window_size)
         kernel_size = n_windows * kernel_params
         
         for layer in range(self.config.n_conv_layers):

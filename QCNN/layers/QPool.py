@@ -1,5 +1,6 @@
 import numpy as np
 import pennylane as qml
+
 class QuantumNativePooling:
     @staticmethod
     def quantum_measurement_pooling(measure_qubits: list[int]) -> list[qml.measurements.ExpectationMP]:
@@ -28,6 +29,6 @@ class QuantumNativePooling:
                     # Controlled quantum rotation - pure quantum pooling
                     qml.CRY(params[param_idx], wires=[in_qubit, out_qubit])
                     param_idx += 1
-                if param_idx + 1 < len(params):
-                    qml.CRZ(params[param_idx + 1], wires=[in_qubit, out_qubit])
-                    param_idx += 2
+                if param_idx < len(params):
+                    qml.CRZ(params[param_idx], wires=[in_qubit, out_qubit])
+                    param_idx += 1
