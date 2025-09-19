@@ -12,8 +12,8 @@ class QuantumNativeConfig:
         self.encoding_type = 'amplitude'  # Quantum data encoding
         
         # Quantum training parameters
-        self.learning_rate = 0.05
-        self.n_epochs = 5 #80 
+        self.learning_rate = 0.005
+        self.n_epochs = 10 #80 
         self.batch_size = 2 #16
         
         # Quantum device
