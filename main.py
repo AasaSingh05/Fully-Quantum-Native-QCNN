@@ -9,6 +9,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+import cProfile
+import pstats
 
 # Add the QCNN package directory to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -22,8 +24,13 @@ from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
 
 print("Starting main execution script...")  # Debug to monitor re-imports
 
-def main():
-    """Main execution function"""
+def main(train_sample_size=None):
+    """Main execution function
+    
+    Args:
+        train_sample_size (int or None): Number of training samples to use. If None,
+                                         all training data is used.
+    """
     print("Entered main() function.")  # Debug print
 
     # Step 1: Configuration
@@ -33,20 +40,36 @@ def main():
     print(f"✅ Encoding: {config.encoding_type}")
     print(f"✅ Training: {config.n_epochs} epochs, lr={config.learning_rate}")
 
-    # Step 2: Generate quantum dataset
-    print("\n📊 Step 2: Generating Quantum Binary Dataset...")
-    X_quantum, y_quantum = generate_quantum_binary_dataset(
-        n_samples=100, image_size=config.image_size
-    )
+    # Define dataset save path
+    dataset_path = os.path.join('Results', 'quantum_dataset.npz')
+    os.makedirs('Results', exist_ok=True)
+
+    # Step 2: Generate or Load quantum dataset
+    if os.path.exists(dataset_path):
+        print(f"\n📥 Loading quantum dataset from '{dataset_path}'...")
+        data = np.load(dataset_path)
+        X_quantum, y_quantum = data['X'], data['y']
+    else:
+        print("\n📊 Step 2: Generating Quantum Binary Dataset...")
+        X_quantum, y_quantum = generate_quantum_binary_dataset(
+            n_samples=300, image_size=config.image_size
+        )
+        np.savez(dataset_path, X=X_quantum, y=y_quantum)
+        print(f"✅ Saved quantum dataset to '{dataset_path}'")
 
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
         X_quantum, y_quantum, test_size=0.3, random_state=42, stratify=y_quantum
     )
 
-    print(f"✅ Training samples: {len(X_train)}")
+    # Limit training samples if train_sample_size parameter set
+    if train_sample_size is not None and train_sample_size < len(X_train):
+        X_train = X_train[:train_sample_size]
+        y_train = y_train[:train_sample_size]
+
+    print(f"✅ Training samples used: {len(X_train)}")
     print(f"✅ Test samples: {len(X_test)}")
-    print(f"✅ Class distribution: {dict(zip(*np.unique(y_train, return_counts=True)))}")
+    print(f"✅ Class distribution (training): {dict(zip(*np.unique(y_train, return_counts=True)))}")
 
     # Step 3: Model initialization
     print("\n⚡ Step 3: Initializing Pure Quantum CNN...")
@@ -124,8 +147,19 @@ def main():
 
 if __name__ == "__main__":
     try:
-        model, acc = main()
+        profiler = cProfile.Profile()
+        profiler.enable()
+
+        # You can specify train_sample_size or None to use all
+        model, acc = main(train_sample_size=50)
+
+        profiler.disable()
         print(f"\n✅ Execution completed successfully! Accuracy: {acc:.1%}")
+
+        # Print profiling stats sorted by cumulative time
+        stats = pstats.Stats(profiler).sort_stats('cumulative')
+        stats.print_stats(20)  # Show top 20 functions by cumulative time
+
     except Exception as e:
         print(f"\n❌ Error during execution: {e}")
         import traceback
