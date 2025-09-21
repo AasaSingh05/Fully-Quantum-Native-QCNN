@@ -4,6 +4,7 @@ import pennylane.numpy as pnp
 from QCNN.config import QuantumNativeConfig 
 from QCNN.layers import QuantumNativeConvolution 
 from QCNN.encoding import PureQuantumEncoder 
+from QCNN.layers import QuantumNativePooling 
 
 
 class PureQuantumNativeCNN:
@@ -39,6 +40,7 @@ class PureQuantumNativeCNN:
         #convolutional layer
         conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
         n_windows = len(conv_windows)
+        
         # Fix: pass the length of a window to get_kernel_param_count (parameters per kernel)
         window_size = len(conv_windows[0]) 
         kernel_params = QuantumNativeConvolution.get_kernel_param_count(window_size)
@@ -95,7 +97,7 @@ class PureQuantumNativeCNN:
         else:
             PureQuantumEncoder.quantum_feature_map(x, all_qubits)
         
-        # Step 2: Quantum convolutional layers
+        # Step 2: Quantum convolutional layers and pooling
         active_qubits = all_qubits.copy()
         current_image_size = self.config.image_size
         
@@ -113,8 +115,16 @@ class PureQuantumNativeCNN:
             
             # Quantum pooling between layers (except last)
             if layer < self.config.n_conv_layers - 1:
-                # Simple quantum pooling: keep every other qubit
-                active_qubits = active_qubits[::2]  
+                # Using quantum_unitary_pooling from QPool.py
+                half = len(active_qubits) // 2
+                input_qubits = active_qubits[:half]
+                output_qubits = active_qubits[half:half+half]
+
+                QuantumNativePooling.quantum_unitary_pooling(
+                    params['quantum_pooling'], input_qubits=input_qubits, output_qubits=output_qubits
+                )
+
+                active_qubits = output_qubits
                 current_image_size = max(2, current_image_size // 2)
         
         # Step 3: Final quantum classification
@@ -151,7 +161,6 @@ class PureQuantumNativeCNN:
         Pure quantum loss computation
         Uses quantum fidelity-based loss
         """
-        # Use pennylane.numpy to handle autograd gradient types properly
         quantum_predictions = []
         for x in X_batch:
             quantum_output = self.quantum_predict_single(x)
@@ -163,9 +172,10 @@ class PureQuantumNativeCNN:
         # Quantum-inspired loss: minimize squared error of output vs label
         quantum_loss = pnp.mean((quantum_predictions - y_batch) ** 2)
         
-        # Quantum regularization: penalize large rotation parameters (L2 penalty)
+        # Disable quantum regularization by not adding penalty
         quantum_penalty = 0
         for param_set in self.quantum_params.values():
             quantum_penalty += pnp.sum(param_set ** 2)
         
         return quantum_loss + 0.001 * quantum_penalty
+        # return quantum_loss

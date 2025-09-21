@@ -7,7 +7,7 @@ class QuantumNativeConfig:
         self.n_qubits = self.image_size ** 2
         
         # Pure quantum architecture parameters  
-        self.n_conv_layers = 1 #2
+        self.n_conv_layers = 2 #2
         self.kernel_size = 2  # 2x2 quantum kernels
         self.encoding_type = 'amplitude'  # Quantum data encoding
         
