@@ -7,14 +7,14 @@ class QuantumNativeConfig:
         self.n_qubits = self.image_size ** 2
         
         # Pure quantum architecture parameters  
-        self.n_conv_layers = 2 #2
+        self.n_conv_layers = 4 #2
         self.kernel_size = 2  # 2x2 quantum kernels
         self.encoding_type = 'amplitude'  # Quantum data encoding
         
         # Quantum training parameters
         self.learning_rate = 0.005
         self.n_epochs = 10 #80 
-        self.batch_size = 2 #16
+        self.batch_size = 4 #16
         
         # Quantum device
         self.device = 'lightning.qubit'  
