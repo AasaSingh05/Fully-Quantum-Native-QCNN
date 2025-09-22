@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Tuple
 
+
 def generate_quantum_binary_dataset(n_samples: int, 
                                    image_size: int = 4) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -34,8 +35,13 @@ def generate_quantum_binary_dataset(n_samples: int,
         img_flat = img.flatten()
         img_normalized = (img_flat - np.mean(img_flat)) / (np.std(img_flat) + 1e-8)
         
-        # Scale to appropriate range for quantum encoding
-        img_scaled = (img_normalized - np.min(img_normalized)) / (np.max(img_normalized) - np.min(img_normalized) + 1e-8)
+        # Scale normalized features to [0,1]
+        img_min = np.min(img_normalized)
+        img_max = np.max(img_normalized)
+        img_scaled = (img_normalized - img_min) / (img_max - img_min + 1e-8)
+        
+        # Scale to [0, 2*pi] for encoding rotation angles
+        img_scaled = img_scaled * 2 * np.pi
         
         X_quantum.append(img_scaled)
         y_quantum.append(label)

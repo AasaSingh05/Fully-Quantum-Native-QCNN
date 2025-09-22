@@ -22,22 +22,24 @@ class QuantumNativePooling:
         Uses controlled rotations to aggregate quantum states
         """
         param_idx = 0
+
+        # Scale parameters from data range to [0, 2pi]
+        params_scaled = (params - np.min(params)) / (np.ptp(params) + 1e-10) * 2 * np.pi
         
-        # Create quantum correlations between input and output qubits
         for out_qubit in output_qubits:
             for in_qubit in input_qubits:
-                if param_idx >= len(params):
+                if param_idx >= len(params_scaled):
                     break
                 
                 # Skip controlled rotation on the same qubit
                 if in_qubit == out_qubit:
                     continue
                 
-                qml.CRY(params[param_idx], wires=[in_qubit, out_qubit])
+                qml.CRY(params_scaled[param_idx], wires=[in_qubit, out_qubit])
                 param_idx += 1
                 
-                if param_idx >= len(params):
+                if param_idx >= len(params_scaled):
                     break
                 
-                qml.CRZ(params[param_idx], wires=[in_qubit, out_qubit])
+                qml.CRZ(params_scaled[param_idx], wires=[in_qubit, out_qubit])
                 param_idx += 1
