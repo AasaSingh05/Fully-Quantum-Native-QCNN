@@ -9,16 +9,17 @@ class QuantumNativeConfig:
         # Pure quantum architecture parameters  
         self.n_conv_layers = 4 #2
         self.kernel_size = 2  # 2x2 quantum kernels
-        self.encoding_type = 'amplitude'  # Quantum data encoding
+        self.encoding_type = 'feature_map'  # Quantum data encoding
         
         # Quantum training parameters
         self.learning_rate = 0.005
-        self.n_epochs = 10 #80 
-        self.batch_size = 4 #16
+        self.n_epochs = 60 #80 
+        self.batch_size = 8 #16
         
         # Quantum device
         self.device = 'lightning.qubit'  
         self.shots = None  # Exact quantum simulation
 
+
 config = QuantumNativeConfig()
-print(f"🔧 Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers") 
+print(f"Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")

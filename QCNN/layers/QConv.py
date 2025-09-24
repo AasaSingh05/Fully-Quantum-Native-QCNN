@@ -1,65 +1,75 @@
 import numpy as np
 import pennylane as qml
 
+
 class QuantumNativeConvolution:
     @staticmethod
     def quantum_conv2d_kernel(params: np.ndarray, qubits: list[int]) -> None:
         """
-        Quantum convolution kernel for any number of qubits (multiple of 4).
-        Applies parameter scaling and quantum rotations with nearest-neighbor entanglement.
+        Quantum convolution kernel for a 2x2 window (4 qubits).
+        Applies parameterized rotations with local entanglement.
 
         Args:
-            params (np.ndarray): Array of parameters, length = 4 * len(qubits)
-            qubits (list[int]): List of qubit indices (must be multiple of 4)
+            params (np.ndarray): Trainable kernel parameters for a single 2x2 window.
+                                 Shape: (4, depth, 2) where last dim is [RY, RZ].
+            qubits (list[int]): List of 4 qubit indices forming a 2x2 window.
         """
         n = len(qubits)
-        if n % 4 != 0:
-            raise ValueError("Number of qubits must be a multiple of 4")
+        if n != 4:
+            raise ValueError("Convolution window must be exactly 4 qubits (2x2) for this kernel.")
 
-        params = np.array(params)
-        if len(params) != 4 * n:
-            raise ValueError(f"Expected {4 * n} parameters, got {len(params)}")
+        params = np.array(params, dtype=float)
 
-        # Scale parameters from data range to [0, 2pi]
-        params_scaled = (params - np.min(params)) / (np.ptp(params) + 1e-10) * 2 * np.pi
+        # Backward-compat handling:
+        # If user passes a flat vector of length 4 * n (old API), reshape conservatively to depth=1, 2 angles.
+        # Old code expected length = 4 * n with 4 layers; we now map to (4, 1, 2) by slicing the first 8 values.
+        if params.ndim == 1:
+            if params.size < 8:
+                raise ValueError("Flat params must have at least 8 values (4 qubits * [RY,RZ]).")
+            params = params[:8].reshape(4, 1, 2)
+        elif params.ndim == 2:
+            # Allow (4, 2) -> interpret as single depth with [RY,RZ] per qubit
+            if params.shape == (4, 2):
+                params = params.reshape(4, 1, 2)
+            else:
+                raise ValueError("2D params must be shape (4,2) = [RY,RZ] per qubit.")
+        elif params.ndim == 3:
+            if params.shape[0] != 4 or params.shape[2] != 2:
+                raise ValueError("3D params must be (4, depth, 2) with last dim [RY,RZ].")
+        else:
+            raise ValueError("Unsupported params shape; use (4, depth, 2) or flat length >= 8.")
 
-        param_layers = params_scaled.reshape(4, n)
+        depth = params.shape[1]
 
-        # Layer 1 & 3 rotations with scaled parameters
-        for i, qubit in enumerate(qubits):
-            qml.RY(param_layers[0, i], wires=qubit)
-            qml.RZ(param_layers[1, i], wires=qubit)
-            qml.RX(param_layers[2, i], wires=qubit)
+        # Single-qubit rotations per depth slice
+        for d in range(depth):
+            for i, q in enumerate(qubits):
+                theta_ry = float(params[i, d, 0])
+                theta_rz = float(params[i, d, 1])
+                qml.RY(theta_ry, wires=q)
+                qml.RZ(theta_rz, wires=q)
 
-        # Compute grid width and check for perfect square
-        width = int(np.sqrt(n))
-        if width * width != n:
-            raise ValueError("Qubits should form a perfect square grid for entanglement")
+            # Local entanglement inside the 2x2 window.
+            # Window layout indices:
+            # [ q0 q1
+            #   q2 q3 ]
+            q0, q1, q2, q3 = qubits
 
-        # Horizontal CNOT entanglements
-        for row in range(width):
-            for col in range(width - 1):
-                qml.CNOT(wires=[qubits[row * width + col], qubits[row * width + col + 1]])
-
-        # Vertical CNOT entanglements
-        for col in range(width):
-            for row in range(width - 1):
-                qml.CNOT(wires=[qubits[row * width + col], qubits[(row + 1) * width + col]])
-
-        # Diagonal CNOT entanglements
-        for row in range(width - 1):
-            for col in range(width - 1):
-                qml.CNOT(wires=[qubits[row * width + col], qubits[(row + 1) * width + col + 1]])
-                qml.CNOT(wires=[qubits[row * width + col + 1], qubits[(row + 1) * width + col]])
-
-        # Final rotations layer
-        for i, qubit in enumerate(qubits):
-            qml.RY(param_layers[3, i], wires=qubit)
+            # Horizontal edges
+            qml.CNOT(wires=[q0, q1])
+            qml.CNOT(wires=[q2, q3])
+            # Vertical edges
+            qml.CNOT(wires=[q0, q2])
+            qml.CNOT(wires=[q1, q3])
+            # Optional diagonal to mix but remain shallow
+            qml.CNOT(wires=[q0, q3])
 
     @staticmethod
-    def get_kernel_param_count(num_qubits: int) -> int:
-        """Number of parameters scales with 4 * num_qubits"""
-        return 4 * num_qubits
+    def get_kernel_param_count(num_qubits: int, depth: int = 1) -> int:
+        """Number of parameters for a 2x2 window kernel: 4 qubits * depth * 2 (RY,RZ)."""
+        if num_qubits != 4:
+            raise ValueError("This kernel is defined for a 2x2 window (4 qubits).")
+        return 4 * depth * 2
 
     @staticmethod
     def get_conv_windows(image_size: int) -> list[list[int]]:

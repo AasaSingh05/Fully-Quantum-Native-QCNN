@@ -37,24 +37,24 @@ class PureQuantumNativeCNN:
 
         params = {}
 
-        #convolutional layer
-        conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
-        n_windows = len(conv_windows)
-
-        # Fix: pass the length of a window to get_kernel_param_count (parameters per kernel)
-        window_size = len(conv_windows[0])
-        kernel_params = QuantumNativeConvolution.get_kernel_param_count(window_size)
-
+        # Convolutional layer: SHARED 2x2 kernel per layer.
+        # Each kernel acts on 4 qubits with shape (4, depth, 2) => [RY, RZ] angles per depth.
+        # Keep depth small for stability.
+        conv_depth = 1
+        kernel_shape = (4, conv_depth, 2)
         for layer in range(self.config.n_conv_layers):
-            param_array = pnp.array(
-                np.random.normal(0, 0.1, (n_windows, kernel_params)), requires_grad=True
-            )
-            params[f'quantum_conv_{layer}'] = param_array
+            kernel_tensor = pnp.array(np.random.normal(0, 0.1, kernel_shape), requires_grad=True)
+            params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
 
-        #pooling layer
-        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.1, 20), requires_grad=True)
+        # Pooling layer parameters:
+        # We consume 3 angles per (keep, discard) pair in QuantumNativePooling.quantum_unitary_pooling.
+        # Max pairs in first stage for 16 qubits is 8; allocate enough and reuse/cycle across stages.
+        max_pairs = self.num_qubits // 2
+        pool_angles = 3 * max_pairs
+        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.1, pool_angles), requires_grad=True)
 
-        #Fully connected classifier layer
+        # Fully connected classifier layer (on up to last 2 active qubits)
+        # Keep head shallow: per-qubit RY plus one entangler if available.
         params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.1, 8), requires_grad=True)
 
         return params
@@ -68,23 +68,22 @@ class PureQuantumNativeCNN:
         params = {}
         idx = 0
 
-        conv_windows = QuantumNativeConvolution.get_conv_windows(self.config.image_size)
-        n_windows = len(conv_windows)
-        # Fix: use window size here too
-        window_size = len(conv_windows[0])
-        kernel_params = QuantumNativeConvolution.get_kernel_param_count(window_size)
-        kernel_size = n_windows * kernel_params
-
+        # Convs: each layer kernel is (4, depth, 2)
+        conv_depth = 1
+        kernel_size = 4 * conv_depth * 2
         for layer in range(self.config.n_conv_layers):
             size = kernel_size
-            params[f'quantum_conv_{layer}'] = flat_params[idx:idx + size].reshape(
-                (n_windows, kernel_params)
-            )
+            slice_flat = flat_params[idx:idx + size]
+            params[f'quantum_conv_kernel_{layer}'] = slice_flat.reshape(4, conv_depth, 2)
             idx += size
 
-        params['quantum_pooling'] = flat_params[idx:idx + 20]
-        idx += 20
+        # Pooling params: fixed length allocated above
+        max_pairs = self.num_qubits // 2
+        pool_angles = 3 * max_pairs
+        params['quantum_pooling'] = flat_params[idx:idx + pool_angles]
+        idx += pool_angles
 
+        # Classifier: fixed length 8
         params['quantum_classifier'] = flat_params[idx:idx + 8]
         idx += 8
 
@@ -106,73 +105,64 @@ class PureQuantumNativeCNN:
         pooling_reduction = getattr(self.config, 'pooling_reduction', 0.5)
 
         for layer in range(self.config.n_conv_layers):
-            # Apply quantum convolution to all windows
-            if current_image_size >= 2:
-                # CHANGED: Build windows on the current active_qubits, not on global indices.
-                # We first get a window pattern for the current image size (relative indices),
-                # then map those relative indices onto the physical wire labels in active_qubits.
-                base_windows = QuantumNativeConvolution.get_conv_windows(current_image_size)  # relative windows  # CHANGED
-                conv_params = params[f'quantum_conv_{layer}']
+            # Apply quantum convolution to all windows on the CURRENT active layout
+            if current_image_size >= 2 and len(active_qubits) >= 4:
+                base_windows = QuantumNativeConvolution.get_conv_windows(current_image_size)  # relative windows
+                kernel = params[f'quantum_conv_kernel_{layer}']  # shared weights: (4, depth, 2)
 
-                # Safety: if parameter tensor was sized from the initial layout, ensure indexing stays in range
-                # by taking min between available conv windows and learned parameter rows.
-                n_windows_runtime = min(len(base_windows), conv_params.shape[0])  # CHANGED
-
-                # Map each relative window to the actual active wires
-                # Assumes that max index in any base window < len(active_qubits)
-                # If pooling reduced active_qubits, this mapping guarantees we only touch surviving wires.
-                for window_idx in range(n_windows_runtime):
-                    rel_window = base_windows[window_idx]
-                    # Validate window fits in current active set
-                    if len(rel_window) == 0:
-                        continue
+                for rel_window in base_windows:
+                    # Skip any window beyond current active wires
                     if max(rel_window) >= len(active_qubits):
-                        # Skip any window that would exceed current active wires
                         continue
-                    # Map relative index to physical wire ID
-                    window_qubits = [active_qubits[i] for i in rel_window]  # CHANGED
-                    QuantumNativeConvolution.quantum_conv2d_kernel(
-                        conv_params[window_idx], window_qubits
-                    )
+                    window_qubits = [active_qubits[i] for i in rel_window]
+                    QuantumNativeConvolution.quantum_conv2d_kernel(kernel, window_qubits)
 
             # Quantum pooling between layers (except last)
             if layer < self.config.n_conv_layers - 1:
                 n_qubits_current = len(active_qubits)
-                n_keep = max(1, int(n_qubits_current * (1 - pooling_reduction)))
+                if n_qubits_current < 2:
+                    break
 
-                # Select disjoint qubit sets for pooling inputs and outputs
-                input_qubits = active_qubits[:n_keep]
-                output_qubits = active_qubits[n_keep: n_keep * 2]
+                # Downsample by half via pairing: keep <- discard
+                # Default pairing: consecutive pairs
+                pairs = QuantumNativePooling.make_pairing(active_qubits)
+                if len(pairs) == 0:
+                    break
 
-                # CHANGED: If not enough qubits to form output pairs, fall back to keeping the first n_keep.
-                if len(output_qubits) < n_keep:
-                    # Pair as many as possible; if odd, keep available outputs.
-                    output_qubits = active_qubits[n_keep:n_qubits_current]
+                keep = [k for (k, _) in pairs]
+                discard = [d for (_, d) in pairs]
 
                 QuantumNativePooling.quantum_unitary_pooling(
-                    params['quantum_pooling'], input_qubits=input_qubits, output_qubits=output_qubits
+                    params['quantum_pooling'],
+                    input_qubits=keep,
+                    output_qubits=discard
                 )
 
-                # CHANGED: Only the output_qubits survive; use them as inputs for the next layer.
-                active_qubits = list(output_qubits)  # CHANGED
+                # Only the keep wires survive for the next stage
+                active_qubits = keep
 
-                # CHANGED: Update the logical image size to match the reduced active set length if needed.
-                # Ensure current_image_size is not larger than the available relative indexing space.
-                current_image_size = max(
-                    2,
-                    min(int(current_image_size * (1 - pooling_reduction)), len(active_qubits))
-                )  # CHANGED
+                # Update the logical image size roughly by half, but at least 2 while >2 active qubits
+                if current_image_size > 2:
+                    current_image_size = max(2, current_image_size // 2)
 
         # Step 3: Final quantum classification
         classifier_params = params['quantum_classifier']
 
-        for i, param in enumerate(classifier_params[:len(active_qubits)]):
-            qml.RY(param, wires=active_qubits[i])
+        # Apply a couple of RY rotations on up to the first two active qubits
+        for i, q in enumerate(active_qubits[:2]):
+            angle = classifier_params[i % len(classifier_params)]
+            qml.RY(angle, wires=q)
 
+        # Light entangler if at least 2 qubits remain
         if len(active_qubits) >= 2:
             qml.CNOT(wires=[active_qubits[0], active_qubits[1]])
 
+        # Optional final single-qubit tweak on the readout qubit
+        if len(active_qubits) >= 1:
+            qml.RZ(classifier_params[-1], wires=active_qubits[0])
+
         # Step 4: Pure quantum measurement
+        # Return expectation on the first active qubit (readout)
         return qml.expval(qml.PauliZ(active_qubits[0]))
 
     def quantum_predict_single(self, x: np.ndarray) -> float:
@@ -185,6 +175,7 @@ class PureQuantumNativeCNN:
         predictions = []
         for x in X:
             quantum_output = self.quantum_predict_single(x)
+            # Keep legacy {-1, 1} labels for compatibility with existing code
             binary_pred = 1 if quantum_output > 0 else -1
             predictions.append(binary_pred)
         return np.array(predictions)

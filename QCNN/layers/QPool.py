@@ -16,30 +16,49 @@ class QuantumNativePooling:
     
     @staticmethod
     def quantum_unitary_pooling(params: np.ndarray, input_qubits: list[int], 
-                               output_qubits: list[int]) -> None:
+                                output_qubits: list[int]) -> None:
         """
         Quantum unitary pooling - compresses quantum information
         Uses controlled rotations to aggregate quantum states
-        """
-        param_idx = 0
 
-        # Scale parameters from data range to [0, 2pi]
-        params_scaled = (params - np.min(params)) / (np.ptp(params) + 1e-10) * 2 * np.pi
-        
-        for out_qubit in output_qubits:
-            for in_qubit in input_qubits:
-                if param_idx >= len(params_scaled):
-                    break
-                
-                # Skip controlled rotation on the same qubit
-                if in_qubit == out_qubit:
-                    continue
-                
-                qml.CRY(params_scaled[param_idx], wires=[in_qubit, out_qubit])
-                param_idx += 1
-                
-                if param_idx >= len(params_scaled):
-                    break
-                
-                qml.CRZ(params_scaled[param_idx], wires=[in_qubit, out_qubit])
-                param_idx += 1
+        Updated semantics:
+        - input_qubits are the KEEP wires (targets).
+        - output_qubits are the DISCARD wires (controls).
+        - No data-dependent scaling; params are trainable angles.
+        - For each (keep <- discard) pair, apply CRY and CRZ from discard to keep,
+          then a small RY on keep to consolidate information.
+        """
+        # Flatten and ensure float
+        angles = np.array(params, dtype=float).reshape(-1)
+        if angles.size == 0:
+            return
+
+        # We consume 3 angles per pair: [cry, crz, post_ry_keep]
+        def triple(idx):
+            a = angles[(3*idx) % angles.size]
+            b = angles[(3*idx + 1) % angles.size]
+            c = angles[(3*idx + 2) % angles.size]
+            return a, b, c
+
+        n_pairs = min(len(input_qubits), len(output_qubits))
+        for i in range(n_pairs):
+            keep = input_qubits[i]
+            discard = output_qubits[i]
+
+            # Skip accidental self-pairing
+            if keep == discard:
+                continue
+
+            a, b, c = triple(i)
+
+            # Controlled rotations from discard -> keep
+            qml.CRY(a, wires=[discard, keep])
+            qml.CRZ(b, wires=[discard, keep])
+
+            # Light disentangle touch on discard (not used after pooling)
+            qml.RY(0.02, wires=discard)
+
+            # Consolidate on keep
+            qml.RY(c, wires=keep)
+
+        # After this, the model should drop 'output_qubits' from the active set to downsample by half.

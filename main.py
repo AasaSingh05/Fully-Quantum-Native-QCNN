@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Main execution script for Pure Quantum Native QCNN
-Place this next to your QCNN folder and run to execute the experiment.
-"""
+#Main execution script for Pure Quantum Native QCNN
 
 import sys
 import os
