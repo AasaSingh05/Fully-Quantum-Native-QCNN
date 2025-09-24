@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-#Main execution script for Pure Quantum Native QCNN
+# Main execution script for Pure Quantum Native QCNN
+
 
 import sys
 import os
@@ -21,12 +22,14 @@ from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
 
 print("Starting main execution script...")  # Debug to monitor re-imports
 
-def main(train_sample_size=None):
+
+def main(train_sample_size=None, use_bce=False):
     """Main execution function
     
     Args:
         train_sample_size (int or None): Number of training samples to use. If None,
                                          all training data is used.
+        use_bce (bool): If True, trainer optimizes BCE over p=(1-<Z>)/2; else MSE on <Z>.
     """
     print("Entered main() function.")  # Debug print
 
@@ -54,6 +57,9 @@ def main(train_sample_size=None):
         np.savez(dataset_path, X=X_quantum, y=y_quantum)
         print(f"✅ Saved quantum dataset to '{dataset_path}'")
 
+    # Normalize inputs if not already in [0,1]; then map to [-1,1] if desired by encoder
+    # Here we keep the raw dataset as-is; the encoder now clips to [-1,1] internally.
+
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
         X_quantum, y_quantum, test_size=0.3, random_state=42, stratify=y_quantum
@@ -78,7 +84,7 @@ def main(train_sample_size=None):
 
     # Step 4: Training
     print("\n🚀 Step 4: Training Pure Quantum CNN...")
-    trainer = QuantumNativeTrainer(learning_rate=config.learning_rate)
+    trainer = QuantumNativeTrainer(learning_rate=config.learning_rate, use_bce=use_bce)
     trained_model = trainer.train_pure_quantum_cnn(
         quantum_model, X_train, y_train, X_test, y_test
     )
@@ -142,13 +148,14 @@ def main(train_sample_size=None):
     print("Exiting main() function.")  # Debug print
     return trained_model, accuracy
 
+
 if __name__ == "__main__":
     try:
         profiler = cProfile.Profile()
         profiler.enable()
 
         # You can specify train_sample_size or None to use all
-        model, acc = main(train_sample_size=50)
+        model, acc = main(train_sample_size=50, use_bce=False)
 
         profiler.disable()
         print(f"\n✅ Execution completed successfully! Accuracy: {acc:.1%}")
