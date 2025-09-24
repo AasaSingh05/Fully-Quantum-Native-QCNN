@@ -13,4 +13,6 @@ implementationTests/*
 #Results
 Results/*
 Results/
+quantum_training_log(BEST).txt
 quantum_training_log.txt
+output.txt
