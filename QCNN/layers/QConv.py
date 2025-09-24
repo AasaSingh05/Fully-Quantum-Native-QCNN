@@ -18,34 +18,35 @@ class QuantumNativeConvolution:
         if n != 4:
             raise ValueError("Convolution window must be exactly 4 qubits (2x2) for this kernel.")
 
-        params = np.array(params, dtype=float)
+        # Accept autograd types; avoid forcing dtype=float here
+        params_arr = np.asarray(params)
 
-        # Backward-compat handling:
-        # If user passes a flat vector of length 4 * n (old API), reshape conservatively to depth=1, 2 angles.
-        # Old code expected length = 4 * n with 4 layers; we now map to (4, 1, 2) by slicing the first 8 values.
-        if params.ndim == 1:
-            if params.size < 8:
+        # Backward-compat handling and shape normalization:
+        # Normalize input to shape (4, depth, 2) with last dim [RY, RZ]
+        if params_arr.ndim == 1:
+            # Flat vector -> must be at least 8 entries (4 qubits * [RY,RZ])
+            if params_arr.size < 8:
                 raise ValueError("Flat params must have at least 8 values (4 qubits * [RY,RZ]).")
-            params = params[:8].reshape(4, 1, 2)
-        elif params.ndim == 2:
+            params_arr = params_arr[:8].reshape(4, 1, 2)
+        elif params_arr.ndim == 2:
             # Allow (4, 2) -> interpret as single depth with [RY,RZ] per qubit
-            if params.shape == (4, 2):
-                params = params.reshape(4, 1, 2)
+            if params_arr.shape == (4, 2):
+                params_arr = params_arr.reshape(4, 1, 2)
             else:
                 raise ValueError("2D params must be shape (4,2) = [RY,RZ] per qubit.")
-        elif params.ndim == 3:
-            if params.shape[0] != 4 or params.shape[2] != 2:
+        elif params_arr.ndim == 3:
+            if params_arr.shape[0] != 4 or params_arr.shape[2] != 2:
                 raise ValueError("3D params must be (4, depth, 2) with last dim [RY,RZ].")
         else:
             raise ValueError("Unsupported params shape; use (4, depth, 2) or flat length >= 8.")
 
-        depth = params.shape[1]
+        depth = params_arr.shape[1]
 
         # Single-qubit rotations per depth slice
         for d in range(depth):
             for i, q in enumerate(qubits):
-                theta_ry = float(params[i, d, 0])
-                theta_rz = float(params[i, d, 1])
+                theta_ry = params_arr[i, d, 0]
+                theta_rz = params_arr[i, d, 1]
                 qml.RY(theta_ry, wires=q)
                 qml.RZ(theta_rz, wires=q)
 
@@ -63,6 +64,9 @@ class QuantumNativeConvolution:
             qml.CNOT(wires=[q1, q3])
             # Optional diagonal to mix but remain shallow
             qml.CNOT(wires=[q0, q3])
+
+        # No data-dependent rescaling; stability and weight sharing come from reusing the same 'params'
+        # for every 2x2 window within a given convolutional layer.
 
     @staticmethod
     def get_kernel_param_count(num_qubits: int, depth: int = 1) -> int:
