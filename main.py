@@ -155,7 +155,7 @@ if __name__ == "__main__":
         profiler.enable()
 
         # You can specify train_sample_size or None to use all
-        model, acc = main(train_sample_size=50, use_bce=False)
+        model, acc = main(train_sample_size=100, use_bce=False)
 
         profiler.disable()
         print(f"\n✅ Execution completed successfully! Accuracy: {acc:.1%}")

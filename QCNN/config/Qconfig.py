@@ -13,8 +13,8 @@ class QuantumNativeConfig:
         
         # Quantum training parameters
         self.learning_rate = 0.005
-        self.n_epochs = 60 #80 
-        self.batch_size = 8 #16
+        self.n_epochs = 100 #80 
+        self.batch_size = 16 #16
         
         # Quantum device
         self.device = 'lightning.qubit'  
