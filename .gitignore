@@ -15,4 +15,5 @@ implementationTests/*
 # Results/
 quantum_training_log(BEST).txt
 quantum_training_log.txt
+quantum_training_log1.txt
 # output.txt
