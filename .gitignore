@@ -1,0 +1,18 @@
+#Venv 
+.venv
+
+#pycache
+QCNN/__pycache__
+QCNN/*/__pycache__
+*.pyc
+
+#for testing and checking modules and snippets
+implementationTests/
+implementationTests/*
+
+#Results
+# Results/*
+# Results/
+quantum_training_log(BEST).txt
+quantum_training_log.txt
+# output.txt
