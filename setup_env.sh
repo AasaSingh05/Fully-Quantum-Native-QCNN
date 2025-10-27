@@ -10,8 +10,10 @@
 echo "=== QCNN Setup Script Starting ==="
 
 # Recommended: Create a fresh virtual environment (requires python3-venv)
-python3 -m venv qcnn_env
-source qcnn_env/bin/activate
+echo "making .venv folder if it doesnt exist"
+mkdir -p .venv
+python3 -m venv .venv
+source .venv/bin/activate.fish
 
 # Upgrade pip
 pip install --upgrade pip
