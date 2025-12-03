@@ -30,9 +30,6 @@ from QCNN.training.Qtrainer import QuantumNativeTrainer
 from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
 from QCNN.utils.metadata_logger import save_metadata
 
-# to save the metadata in a JSON 
-save_metadata("Results/metadata.json", config)
-
 print("Starting main execution script...")  # Debug to monitor re-imports
 
 
@@ -53,25 +50,36 @@ def main(train_sample_size=None, use_bce=False):
     print(f" Encoding: {config.encoding_type}")
     print(f" Training: {config.n_epochs} epochs, lr={config.learning_rate}")
 
-    # Define dataset save path
-    dataset_path = os.path.join('Results', 'quantum_dataset.npz')
-    os.makedirs('Results', exist_ok=True)
+    # save metadata after config is created
+    save_metadata("Results/metadata.json", config)
 
     # Step 2: Generate or Load quantum dataset
-    if os.path.exists(dataset_path):
-        print(f"\n Loading quantum dataset from '{dataset_path}'...")
-        data = np.load(dataset_path)
-        X_quantum, y_quantum = data['X'], data['y']
-    else:
-        print("\n Step 2: Generating Quantum Binary Dataset...")
-        X_quantum, y_quantum = generate_quantum_binary_dataset(
-            n_samples=300, image_size=config.image_size
-        )
-        np.savez(dataset_path, X=X_quantum, y=y_quantum)
-        print(f" Saved quantum dataset to '{dataset_path}'")
+    # using a clean, reproducible dataset file instead of old one
+    clean_dataset_path = os.path.join("Results", "quantum_dataset_clean_seed42.npz")
+    os.makedirs("Results", exist_ok=True)
 
-    # Normalize inputs if not already in [0,1]; then map to [-1,1] if desired by encoder
-    # Here we keep the raw dataset as-is; the encoder now clips to [-1,1] internally.
+    force_regenerate = False  # set True to regenerate dataset manually
+
+    if force_regenerate or not os.path.exists(clean_dataset_path):
+        print("\n No clean dataset found. Generating Quantum Binary Dataset (seed=42)...")
+
+        np.random.seed(42)
+        random.seed(42)
+
+        X_quantum, y_quantum = generate_quantum_binary_dataset(
+            n_samples=400,
+            image_size=config.image_size
+        )
+        np.savez(clean_dataset_path, X=X_quantum, y=y_quantum)
+        print(f" Saved clean dataset to '{clean_dataset_path}'")
+    else:
+        print(f"\n Loading quantum dataset from '{clean_dataset_path}'...")
+        data = np.load(clean_dataset_path)
+        X_quantum, y_quantum = data['X'], data['y']
+
+    print(" Dataset ready.")
+    print(" Shape:", X_quantum.shape)
+    print(" Class distribution:", dict(zip(*np.unique(y_quantum, return_counts=True))))
 
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
@@ -148,9 +156,9 @@ def main(train_sample_size=None, use_bce=False):
     except Exception as e:
         print(f"\n  Plotting failed: {e}")
 
-    print("\n" + "=" * 60)
+    print("\n" + "-" * 60)
     print("EXECUTION OF QCNN COMPLETE!")
-    print("=" * 60)
+    print("-" * 60)
     print(f" Achieved {accuracy:.1%} accuracy with 100% quantum operations")
     return trained_model, accuracy
 
