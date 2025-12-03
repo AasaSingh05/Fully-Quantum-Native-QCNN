@@ -9,6 +9,17 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 import cProfile
 import pstats
+import numpy as np, random
+
+# setting randomness seeds for reproducibility
+np.random.seed(42)
+random.seed(42)
+
+try:
+    import pennylane as qml
+    qml.set_seed(42)
+except:
+    pass
 
 # Add the QCNN package directory to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
