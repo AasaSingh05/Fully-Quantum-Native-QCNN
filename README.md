@@ -252,5 +252,5 @@ Repository: https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN
 
 Aasa Singh Bhui
 VIT Vellore  
-Email: your.email@example.com  
-GitHub: https://github.com/your_username
+Email: aasasingh2005@gmail.com  
+GitHub: https://github.com/AasaSingh05
