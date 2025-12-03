@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # Main execution script for Pure Quantum Native QCNN
 
-
 import sys
 import os
-import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 import cProfile
