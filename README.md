@@ -243,7 +243,7 @@ The only classical components:
 ```
 Author: Aasa Singh Bhui  
 Project: Fully Quantum-Native QCNN (2025)  
-Repository: https://github.com/AasaSingh05/AICourseProject
+Repository: https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN
 ```
 
 ---
