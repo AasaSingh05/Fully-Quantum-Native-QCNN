@@ -28,6 +28,10 @@ from QCNN.config.Qconfig import QuantumNativeConfig
 from QCNN.models.QCNNModel import PureQuantumNativeCNN
 from QCNN.training.Qtrainer import QuantumNativeTrainer
 from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
+from QCNN.utils.metadata_logger import save_metadata
+
+# to save the metadata in a JSON 
+save_metadata("Results/metadata.json", config)
 
 print("Starting main execution script...")  # Debug to monitor re-imports
 
