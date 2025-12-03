@@ -8,28 +8,60 @@ from QCNN.models import PureQuantumNativeCNN
 
 
 class QuantumNativeTrainer:
-    """parameter-shift rule gradients"""
-    
+    """
+    Trainer implementing parameter-shift-based optimization for QCNN models.
+    Provides MSE or BCE objectives, Adam optimizer integration, checkpointing,
+    and training diagnostics logged to file.
+    """
+
     def __init__(self, learning_rate: float = 0.005, use_bce: bool = False):
+        """
+        Initialize trainer with learning rate, loss mode, and optimizer.
+
+        Args:
+            learning_rate: Adam stepsize for optimizing quantum parameters
+            use_bce: whether to use BCE on mapped probabilities instead of MSE
+        """
         self.learning_rate = learning_rate
         self.use_bce = use_bce  # optional BCE on mapped probability
         # Use quantum-aware optimizer
         self.quantum_optimizer = qml.AdamOptimizer(stepsize=learning_rate)
     
     def save_params(self, params: dict, filepath: str):
-        """Save quantum circuit parameters to disk"""
+        """
+        Save quantum parameters to disk as .npz.
+
+        Args:
+            params: dict of trainable parameter arrays
+            filepath: output file path
+        """
         numpy_params = {k: np.array(v) for k, v in params.items()}
         np.savez(filepath, **numpy_params)
     
     def load_params(self, filepath: str):
-        """Load quantum circuit parameters from disk"""
+        """
+        Load saved quantum parameter tensors from .npz file.
+
+        Args:
+            filepath: path to saved weights
+
+        Returns:
+            dict of parameter names mapped to PennyLane arrays
+        """
         data = np.load(filepath)
         return {k: pnp.array(data[k], requires_grad=True) for k in data.files}
     
     def _bce_loss(self, logits_or_expvals, labels_pm1):
         """
-        Binary cross-entropy over probabilities p = (1 - z)/2
-        labels_pm1 are in {-1, +1}; convert to {0,1} for BCE.
+        Binary cross-entropy loss on probabilities p = (1 - <Z>)/2.
+        Input labels are {-1, +1}; internally converted to {0,1}.
+
+        Args:
+            logits_or_expvals: model outputs in [-1,1]
+            labels_pm1: labels in {-1,1}
+
+        Returns:
+            scalar BCE loss
         """
         z = pnp.clip(pnp.array(logits_or_expvals), -1.0, 1.0)
         p = (1.0 - z) * 0.5  # map <Z> in [-1,1] -> p in [0,1]
@@ -41,6 +73,20 @@ class QuantumNativeTrainer:
                                X_train: np.ndarray, y_train: np.ndarray,
                                X_test: np.ndarray, y_test: np.ndarray,
                                log_filepath='quantum_training_log.txt') -> PureQuantumNativeCNN:
+        """
+        Train QCNN model end-to-end using parameter-shift-compatible optimization.
+        Logs diagnostics per batch, tracks best test accuracy, applies checkpointing,
+        and returns the trained model.
+
+        Args:
+            model: PureQuantumNativeCNN instance to optimize
+            X_train, y_train: training dataset
+            X_test, y_test: evaluation dataset
+            log_filepath: where to write training diagnostics
+
+        Returns:
+            model with best-performing parameters restored
+        """
         with open(log_filepath, 'w') as log_file:
             log_file.write("Starting Pure Quantum Native Training\n")
             log_file.write("="*50 + "\n")
@@ -140,6 +186,16 @@ class QuantumNativeTrainer:
     
     def _compute_quantum_accuracy(self, model: PureQuantumNativeCNN, 
                                   X: np.ndarray, y: np.ndarray) -> float:
-        """Compute quantum classification accuracy"""
+        """
+        Compute binary classification accuracy using quantum predictions.
+
+        Args:
+            model: trained QCNN
+            X: samples
+            y: target labels in {-1,1}
+
+        Returns:
+            scalar accuracy between 0 and 1
+        """
         quantum_predictions = model.quantum_predict_batch(X)
         return np.mean(quantum_predictions == y)
