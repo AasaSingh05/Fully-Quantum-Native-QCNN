@@ -3,6 +3,13 @@ import pennylane as qml
 
 
 class QuantumNativeConvolution:
+    """
+    Quantum-native 2×2 convolution operator.
+    Implements a shared parameterized quantum kernel applied across
+    local 2×2 windows in the qubit grid, using RY/RZ rotations and
+    shallow entanglement consistent with NISQ constraints.
+    """
+
     @staticmethod
     def quantum_conv2d_kernel(params: np.ndarray, qubits: list[int]) -> None:
         """
@@ -70,14 +77,35 @@ class QuantumNativeConvolution:
 
     @staticmethod
     def get_kernel_param_count(num_qubits: int, depth: int = 1) -> int:
-        """Number of parameters for a 2x2 window kernel: 4 qubits * depth * 2 (RY,RZ)."""
+        """
+        Returns the number of trainable parameters for a single 2×2 quantum kernel.
+        
+        For a window of 4 qubits:
+            RY and RZ per qubit per depth → 4 * depth * 2.
+
+        Args:
+            num_qubits: number of qubits in window (must be 4)
+            depth: number of rotation layers
+
+        Returns:
+            Total parameter count for kernel.
+        """
         if num_qubits != 4:
             raise ValueError("This kernel is defined for a 2x2 window (4 qubits).")
         return 4 * depth * 2
 
     @staticmethod
     def get_conv_windows(image_size: int) -> list[list[int]]:
-        """Generate all 2x2 windows for a square grid qubit layout"""
+        """
+        Generates all 2×2 convolution windows for an image-size × image-size qubit grid.
+        Windows are returned as lists of 4 qubit indices in raster-scan order.
+
+        Args:
+            image_size: width/height of square grid
+
+        Returns:
+            List of 4-qubit windows (as index lists) for sliding 2×2 convolution.
+        """
         windows = []
         for row in range(image_size - 1):
             for col in range(image_size - 1):

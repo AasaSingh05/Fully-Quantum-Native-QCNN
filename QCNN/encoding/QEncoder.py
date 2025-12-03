@@ -2,12 +2,25 @@ import numpy as np
 import pennylane as qml
 
 
-class PureQuantumEncoder:    
+class PureQuantumEncoder:
+    """
+    Quantum-native encoder implementing amplitude encoding and
+    rotation-based quantum feature maps. Provides purely unitary
+    data embedding for QCNN pipelines without classical preprocessing.
+    """
+
     @staticmethod
     def amplitude_encoding(data: np.ndarray, wires: list[int]) -> None:
         """
-        Pure quantum amplitude encoding
-        Encodes 2^n classical values into n qubits via quantum amplitudes
+        Pure quantum amplitude encoding.
+        Maps a classical vector into the amplitudes of an n-qubit
+        quantum state, padding or truncating as required. Normalizes
+        the state to satisfy ||ψ|| = 1 and embeds using PennyLane's
+        AmplitudeEmbedding.
+        
+        Args:
+            data: 1D numpy array of real values to embed
+            wires: list of qubit indices for the embedding
         """
         # Ensure data fits in quantum state space
         max_size = 2 ** len(wires)
@@ -26,11 +39,22 @@ class PureQuantumEncoder:
         # Pure quantum encoding - no classical preprocessing
         qml.AmplitudeEmbedding(features=data_norm, wires=wires, normalize=True)
     
-    @staticmethod  
+    @staticmethod
     def quantum_feature_map(data: np.ndarray, wires: list[int]) -> None:
         """
-        Advanced quantum feature map with entangling layers
-        Creates quantum correlations impossible classically
+        Rotation-based entangling quantum feature map.
+        Applies data-dependent RZ/RY rotations followed by sparse
+        entanglement patterns to embed nonlinear correlations that
+        classical preprocessing cannot easily represent.
+
+        Ensembles used:
+            - Local Hadamard and RZ rotations
+            - Linear-chain entanglement with correlation-based RZ gates
+            - Optional 2D grid entanglement for square layouts (e.g., 4×4)
+        
+        Args:
+            data: 1D numpy array of input values
+            wires: list of qubit indices used for the feature map
         """
         # Symmetric scheme: use one feature per wire, clip to [-1, 1],
         # then map to bounded angles preserving sign information
