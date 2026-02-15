@@ -236,8 +236,7 @@ class PureQuantumNativeCNN:
         """
         predictions = []
         for x in X:
-            quantum_output = self.quantu
-n_predict_single(x)
+            quantum_output = self.quantum_predict_single(x)
             binary_pred = 1 if quantum_output > 0 else -1
             predictions.append(binary_pred)
         return np.array(predictions)

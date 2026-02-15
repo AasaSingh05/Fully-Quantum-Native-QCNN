@@ -6,6 +6,11 @@ class QuantumNativeConfig:
         self.image_size = 4  # 4x4 = 16 qubits
         self.n_qubits = self.image_size ** 2
         
+        # Dataset parameters
+        self.n_classes = 2  # Binary classification
+        self.n_features = self.n_qubits  # Number of features per sample
+        self.preprocessing_mode = 'minmax'  # Normalization method: 'minmax', 'standard', 'robust'
+        
         # Pure quantum architecture parameters  
         self.n_conv_layers = 4 #2
         self.kernel_size = 2  # 2x2 quantum kernels

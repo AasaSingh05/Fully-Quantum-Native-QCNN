@@ -72,7 +72,8 @@ class QuantumNativeTrainer:
     def train_pure_quantum_cnn(self, model: PureQuantumNativeCNN, 
                                X_train: np.ndarray, y_train: np.ndarray,
                                X_test: np.ndarray, y_test: np.ndarray,
-                               log_filepath='quantum_training_log.txt') -> PureQuantumNativeCNN:
+                               log_filepath='quantum_training_log.txt',
+                               validate_data: bool = True) -> PureQuantumNativeCNN:
         """
         Train QCNN model end-to-end using parameter-shift-compatible optimization.
         Logs diagnostics per batch, tracks best test accuracy, applies checkpointing,
@@ -80,15 +81,21 @@ class QuantumNativeTrainer:
 
         Args:
             model: PureQuantumNativeCNN instance to optimize
-            X_train, y_train: training dataset
-            X_test, y_test: evaluation dataset
+            X_train, y_train: training dataset (preprocessed for quantum encoding)
+            X_test, y_test: evaluation dataset (preprocessed for quantum encoding)
             log_filepath: where to write training diagnostics
+            validate_data: whether to validate dataset compatibility
 
         Returns:
             model with best-performing parameters restored
         """
+        # Validate dataset compatibility with quantum circuit
+        if validate_data:
+            self._validate_dataset(X_train, y_train, model.config.n_qubits)
+            self._validate_dataset(X_test, y_test, model.config.n_qubits)
+        
         with open(log_filepath, 'w') as log_file:
-            log_file.write("Starting Pure Quantum Native Training\n")
+            log_file.write("Starting Training\n")
             log_file.write("="*50 + "\n")
 
             best_accuracy = 0
@@ -199,3 +206,36 @@ class QuantumNativeTrainer:
         """
         quantum_predictions = model.quantum_predict_batch(X)
         return np.mean(quantum_predictions == y)
+    
+    def _validate_dataset(self, X: np.ndarray, y: np.ndarray, n_qubits: int):
+        """
+        Validate dataset compatibility with quantum circuit requirements.
+
+        Args:
+            X: Feature array
+            y: Label array
+            n_qubits: Number of qubits in the circuit
+
+        Raises:
+            ValueError if validation fails
+        """
+        if X.shape[0] != y.shape[0]:
+            raise ValueError(f"Sample count mismatch: X has {X.shape[0]}, y has {y.shape[0]}")
+        
+        if X.shape[1] != n_qubits:
+            raise ValueError(
+                f"Feature count {X.shape[1]} doesn't match n_qubits {n_qubits}. "
+                f"Please preprocess your data using dataset_loader.load_dataset() or "
+                f"data_preprocessing.preprocess_for_quantum()"
+            )
+        
+        if not np.all((X >= -0.1) & (X <= 2 * np.pi + 0.1)):
+            print(f"Warning: Features should be in [0, 2π] range for quantum encoding. "
+                  f"Got [{X.min():.3f}, {X.max():.3f}]")
+        
+        unique_labels = np.unique(y)
+        if not np.array_equal(unique_labels, np.array([-1, 1])):
+            raise ValueError(
+                f"Labels must be {{-1, +1}} for binary classification. Got {unique_labels}. "
+                f"Use data_preprocessing.encode_labels() to convert your labels."
+            )

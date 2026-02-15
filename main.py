@@ -3,6 +3,7 @@
 
 import sys
 import os
+import argparse
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 import cProfile
@@ -28,18 +29,21 @@ from QCNN.config.Qconfig import QuantumNativeConfig
 from QCNN.models.QCNNModel import PureQuantumNativeCNN
 from QCNN.training.Qtrainer import QuantumNativeTrainer
 from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
+from QCNN.utils.dataset_loader import load_dataset
 from QCNN.utils.metadata_logger import save_metadata
 
 print("Starting main execution script...")  # Debug to monitor re-imports
 
 
-def main(train_sample_size=None, use_bce=False):
+def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type='synthetic'):
     """Main execution function
     
     Args:
         train_sample_size (int or None): Number of training samples to use. If None,
                                          all training data is used.
         use_bce (bool): If True, trainer optimizes BCE over p=(1-<Z>)/2; else MSE on <Z>.
+        dataset_path (str or None): Path to custom dataset file
+        dataset_type (str): Type of dataset ('synthetic', 'npz', 'csv', 'mnist')
     """
     print("Entered main() function.")  # Debug print
 
@@ -53,33 +57,48 @@ def main(train_sample_size=None, use_bce=False):
     # save metadata after config is created
     save_metadata("Results/metadata.json", config)
 
-    # Step 2: Generate or Load quantum dataset
-    # using a clean, reproducible dataset file instead of old one
-    clean_dataset_path = os.path.join("Results", "quantum_dataset_clean_seed42.npz")
+    # Step 2: Load dataset (synthetic or custom)
     os.makedirs("Results", exist_ok=True)
-
-    force_regenerate = False  # set True to regenerate dataset manually
-
-    if force_regenerate or not os.path.exists(clean_dataset_path):
-        print("\n No clean dataset found. Generating Quantum Binary Dataset (seed=42)...")
-
-        np.random.seed(42)
-        random.seed(42)
-
-        X_quantum, y_quantum = generate_quantum_binary_dataset(
-            n_samples=400,
-            image_size=config.image_size
-        )
-        np.savez(clean_dataset_path, X=X_quantum, y=y_quantum)
-        print(f" Saved clean dataset to '{clean_dataset_path}'")
+    
+    if dataset_type == 'synthetic':
+        # Use synthetic dataset (backward compatibility)
+        clean_dataset_path = os.path.join("Results", "quantum_dataset_clean_seed42.npz")
+        force_regenerate = False
+        
+        if force_regenerate or not os.path.exists(clean_dataset_path):
+            print("\nGenerating Quantum Binary Dataset (seed=42)...")
+            np.random.seed(42)
+            random.seed(42)
+            
+            X_quantum, y_quantum = generate_quantum_binary_dataset(
+                n_samples=400,
+                image_size=config.image_size
+            )
+            np.savez(clean_dataset_path, X=X_quantum, y=y_quantum)
+            print(f"Saved dataset to '{clean_dataset_path}'")
+        else:
+            print(f"\nLoading synthetic dataset from '{clean_dataset_path}'...")
+            data = np.load(clean_dataset_path)
+            X_quantum, y_quantum = data['X'], data['y']
+    
     else:
-        print(f"\n Loading quantum dataset from '{clean_dataset_path}'...")
-        data = np.load(clean_dataset_path)
-        X_quantum, y_quantum = data['X'], data['y']
-
-    print(" Dataset ready.")
-    print(" Shape:", X_quantum.shape)
-    print(" Class distribution:", dict(zip(*np.unique(y_quantum, return_counts=True))))
+        # Load custom dataset
+        print(f"\nLoading custom dataset (type: {dataset_type})...")
+        
+        if dataset_path is None:
+            raise ValueError("dataset_path must be provided for custom datasets")
+        
+        X_quantum, y_quantum = load_dataset(
+            source=dataset_path,
+            dataset_type=dataset_type,
+            n_qubits=config.n_qubits,
+            image_size=config.image_size,
+            normalization=config.preprocessing_mode
+        )
+    
+    print("Dataset ready.")
+    print(f"Shape: {X_quantum.shape}")
+    print(f"Class distribution: {dict(zip(*np.unique(y_quantum, return_counts=True)))}")
 
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
@@ -164,21 +183,44 @@ def main(train_sample_size=None, use_bce=False):
 
 
 if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
+    parser.add_argument('--dataset', type=str, default='synthetic',
+                       choices=['synthetic', 'npz', 'csv', 'mnist'],
+                       help='Dataset type to use')
+    parser.add_argument('--path', type=str, default=None,
+                       help='Path to custom dataset file (required for npz/csv)')
+    parser.add_argument('--samples', type=int, default=None,
+                       help='Number of training samples to use (None = all)')
+    parser.add_argument('--use-bce', action='store_true',
+                       help='Use BCE loss instead of MSE')
+    parser.add_argument('--no-profile', action='store_true',
+                       help='Disable profiling')
+    
+    args = parser.parse_args()
+    
     try:
-        profiler = cProfile.Profile()
-        profiler.enable()
-
-        # You can specify train_sample_size or None to use all
-        model, acc = main(train_sample_size=100, use_bce=False)
-
-        profiler.disable()
-        print(f"\n Execution completed successfully! Accuracy: {acc:.1%}")
-
-        # Print profiling stats sorted by cumulative time
-        stats = pstats.Stats(profiler).sort_stats('cumulative')
-        stats.print_stats(20)  # Show top 20 functions by cumulative time
-
+        if not args.no_profile:
+            profiler = cProfile.Profile()
+            profiler.enable()
+        
+        # Run main with arguments
+        model, acc = main(
+            train_sample_size=args.samples,
+            use_bce=args.use_bce,
+            dataset_path=args.path,
+            dataset_type=args.dataset
+        )
+        
+        if not args.no_profile:
+            profiler.disable()
+            print(f"\nExecution completed successfully! Accuracy: {acc:.1%}")
+            stats = pstats.Stats(profiler).sort_stats('cumulative')
+            stats.print_stats(20)
+        else:
+            print(f"\nExecution completed successfully! Accuracy: {acc:.1%}")
+    
     except Exception as e:
-        print(f"\n Error during execution: {e}")
+        print(f"\nError during execution: {e}")
         import traceback
         traceback.print_exc()
