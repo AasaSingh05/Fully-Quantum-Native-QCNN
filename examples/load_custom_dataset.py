@@ -46,7 +46,7 @@ def example_1_load_npz():
         normalization='minmax'
     )
     
-    print(f"✓ Loaded {len(X)} samples from NPZ file")
+    print(f"Loaded {len(X)} samples from NPZ file")
     print(f"  Shape: {X.shape}, Labels: {np.unique(y)}")
     
     return X, y, config
@@ -87,7 +87,7 @@ def example_2_load_csv():
         label_column='label'  # Specify label column name
     )
     
-    print(f"✓ Loaded {len(X)} samples from CSV file")
+    print(f"Loaded {len(X)} samples from CSV file")
     print(f"  Shape: {X.shape}, Labels: {np.unique(y)}")
     
     return X, y, config
@@ -113,7 +113,7 @@ def example_3_load_mnist():
             classes=(0, 1)  # Binary classification: 0 vs 1
         )
         
-        print(f"✓ Loaded {len(X)} MNIST samples")
+        print(f"Loaded {len(X)} MNIST samples")
         print(f"  Shape: {X.shape}, Labels: {np.unique(y)}")
         
         return X, y, config
@@ -149,7 +149,7 @@ def example_4_custom_arrays():
         normalization='standard'
     )
     
-    print(f"✓ Loaded {len(X)} custom samples")
+    print(f"Loaded {len(X)} custom samples")
     print(f"  Shape: {X.shape}, Labels: {np.unique(y)}")
     
     return X, y, config
@@ -185,7 +185,7 @@ def train_with_custom_data(X, y, config):
     # Evaluate
     predictions = trained_model.quantum_predict_batch(X_test)
     accuracy = np.mean(predictions == y_test)
-    print(f"\n✓ Final Test Accuracy: {accuracy:.1%}")
+    print(f"Final Test Accuracy: {accuracy:.1%}")
     
     return trained_model
 

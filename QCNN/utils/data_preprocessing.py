@@ -171,7 +171,8 @@ def preprocess_for_quantum(X: np.ndarray,
                            y: np.ndarray,
                            n_qubits: int,
                            image_size: Optional[int] = None,
-                           normalization: str = 'minmax') -> Tuple[np.ndarray, np.ndarray]:
+                           normalization: str = 'minmax',
+                           encoding_type: str = 'feature_map') -> Tuple[np.ndarray, np.ndarray]:
     """
     Complete preprocessing pipeline for quantum circuit compatibility.
     
@@ -179,32 +180,54 @@ def preprocess_for_quantum(X: np.ndarray,
         X: Input features (any shape)
         y: Labels
         n_qubits: Number of qubits in quantum circuit
-        image_size: If provided, reshape to (image_size, image_size)
+        image_size: If provided, objective image size for resizing/reshaping
         normalization: Normalization method
+        encoding_type: 'feature_map', 'amplitude', or 'patch'
     
     Returns:
-        Preprocessed (X, y) ready for quantum encoding
+        Preprocessed (X, y) ready for quantum encoding/processing
     """
-    # Handle image reshaping if needed
-    if image_size is not None:
-        expected_features = image_size * image_size
-        if X.ndim > 2:
-            # Likely images - resize
-            X = resize_images(X, (image_size, image_size))
-            X = X.reshape(X.shape[0], -1)
-        else:
-            # Flatten and pad/truncate
-            X = flatten_and_pad(X, expected_features)
+    # 1. Handle image structure and feature count
+    if encoding_type == 'patch':
+        # Patch encoding needs to preserve 2D structure for the quanv layer
+        if image_size is not None:
+            if X.ndim > 2:
+                # Resize if needed
+                X = resize_images(X, (image_size, image_size))
+            else:
+                # Reshape flattened features back to 2D
+                n_samples = X.shape[0]
+                expected = image_size * image_size
+                if X.shape[1] != expected:
+                    X = flatten_and_pad(X, expected)
+                X = X.reshape(n_samples, image_size, image_size)
+        # We don't flatten for 'patch' mode here, QCNNModel will do it after quanv
     else:
-        # Just ensure we have correct number of features
-        if X.ndim > 2:
-            X = X.reshape(X.shape[0], -1)
-        X = flatten_and_pad(X, n_qubits)
-    
-    # Normalize to quantum range [0, 2π]
+        # Standard flattening/resizing for feature_map and amplitude
+        if image_size is not None:
+            expected_features = image_size * image_size
+            if X.ndim > 2:
+                X = resize_images(X, (image_size, image_size))
+                X = X.reshape(X.shape[0], -1)
+            else:
+                X = flatten_and_pad(X, expected_features)
+        else:
+            if X.ndim > 2:
+                X = X.reshape(X.shape[0], -1)
+            
+            # For amplitude encoding, we might need a specific power-of-2 feature count
+            if encoding_type == 'amplitude':
+                target_features = 2 ** n_qubits
+            else:
+                target_features = n_qubits
+            
+            X = flatten_and_pad(X, target_features)
+
+    # 2. Normalize to quantum range [0, 2π]
+    # (Even for amplitude encoding, some range scaling is helpful before state prep)
     X_normalized = normalize_to_quantum_range(X, method=normalization)
     
-    # Encode labels to {-1, +1}
+    # 3. Encode labels to {-1, +1}
     y_encoded = encode_labels(y, encoding='binary')
     
     return X_normalized, y_encoded

@@ -35,23 +35,31 @@ from QCNN.utils.metadata_logger import save_metadata
 print("Starting main execution script...")  # Debug to monitor re-imports
 
 
-def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type='synthetic'):
+def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type='synthetic', 
+         encoding='auto', image_size=None):
     """Main execution function
     
     Args:
-        train_sample_size (int or None): Number of training samples to use. If None,
-                                         all training data is used.
-        use_bce (bool): If True, trainer optimizes BCE over p=(1-<Z>)/2; else MSE on <Z>.
+        train_sample_size (int or None): Number of training samples to use.
+        use_bce (bool): If True, trainer optimizes BCE; else MSE.
         dataset_path (str or None): Path to custom dataset file
         dataset_type (str): Type of dataset ('synthetic', 'npz', 'csv', 'mnist')
+        encoding (str): Encoding type ('auto', 'feature_map', 'amplitude', 'patch')
+        image_size (int or None): Width/height of square image
     """
-    print("Entered main() function.")  # Debug print
+    print("Entered main() function.")
 
     # Step 1: Configuration
     print("\nStep 1: Initializing Quantum Configuration...")
-    config = QuantumNativeConfig()
+    # Use factory to auto-configure based on image size and desired encoding
+    if image_size is None:
+        image_size = 4 if dataset_type == 'synthetic' else 28 # Default for MNIST/others
+    
+    config = QuantumNativeConfig.from_image_size(image_size, encoding)
+    
     print(f" Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")
     print(f" Encoding: {config.encoding_type}")
+    print(f" Image Size: {config.image_size}x{config.image_size}")
     print(f" Training: {config.n_epochs} epochs, lr={config.learning_rate}")
 
     # save metadata after config is created
@@ -93,7 +101,8 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
             dataset_type=dataset_type,
             n_qubits=config.n_qubits,
             image_size=config.image_size,
-            normalization=config.preprocessing_mode
+            normalization=config.preprocessing_mode,
+            encoding_type=config.encoding_type
         )
     
     print("Dataset ready.")
@@ -185,17 +194,11 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
-    parser.add_argument('--dataset', type=str, default='synthetic',
-                       choices=['synthetic', 'npz', 'csv', 'mnist'],
-                       help='Dataset type to use')
-    parser.add_argument('--path', type=str, default=None,
-                       help='Path to custom dataset file (required for npz/csv)')
-    parser.add_argument('--samples', type=int, default=None,
-                       help='Number of training samples to use (None = all)')
-    parser.add_argument('--use-bce', action='store_true',
-                       help='Use BCE loss instead of MSE')
-    parser.add_argument('--no-profile', action='store_true',
-                       help='Disable profiling')
+    parser.add_argument('--encoding', type=str, default='auto',
+                       choices=['auto', 'feature_map', 'amplitude', 'patch'],
+                       help='Encoding strategy to use')
+    parser.add_argument('--image-size', type=int, default=None,
+                       help='Width/height of square input images')
     
     args = parser.parse_args()
     
@@ -209,7 +212,9 @@ if __name__ == "__main__":
             train_sample_size=args.samples,
             use_bce=args.use_bce,
             dataset_path=args.path,
-            dataset_type=args.dataset
+            dataset_type=args.dataset,
+            encoding=args.encoding,
+            image_size=args.image_size
         )
         
         if not args.no_profile:

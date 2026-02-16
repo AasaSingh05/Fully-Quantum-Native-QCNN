@@ -195,6 +195,7 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
                 n_qubits: int = 16,
                 image_size: Optional[int] = 4,
                 normalization: str = 'minmax',
+                encoding_type: str = 'feature_map',
                 **kwargs) -> Tuple[np.ndarray, np.ndarray]:
     """
     Universal dataset loader with automatic preprocessing.
@@ -205,12 +206,15 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         n_qubits: Number of qubits in quantum circuit
         image_size: Target image size (if applicable)
         normalization: Normalization method
+        encoding_type: 'feature_map', 'amplitude', or 'patch'
         **kwargs: Additional arguments for specific loaders
     
     Returns:
         Preprocessed (X, y) ready for quantum training
     """
     # Handle direct array input
+    X = None
+    y = None
     if isinstance(source, tuple) and len(source) == 2:
         X, y = source
         dataset_type = 'array'
@@ -243,6 +247,9 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     elif dataset_type == 'mnist':
         X, y = load_mnist_subset(**kwargs)
     
+    elif dataset_type == 'array' and X is None:
+        X, y = source
+    
     elif dataset_type == 'array':
         # Already loaded
         pass
@@ -255,7 +262,8 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     
     # Preprocess for quantum circuit
     X_processed, y_processed = preprocess_for_quantum(
-        X, y, n_qubits=n_qubits, image_size=image_size, normalization=normalization
+        X, y, n_qubits=n_qubits, image_size=image_size, normalization=normalization,
+        encoding_type=encoding_type
     )
     
     print(f"Preprocessed for quantum: {X_processed.shape}, labels: {np.unique(y_processed)}")
@@ -291,5 +299,5 @@ def validate_dataset(X: np.ndarray, y: np.ndarray, n_qubits: int) -> bool:
     if not np.array_equal(unique_labels, np.array([-1, 1])):
         raise ValueError(f"Labels must be {{-1, +1}}. Got {unique_labels}")
     
-    print("✓ Dataset validation passed")
+    print("Dataset validation passed")
     return True

@@ -207,14 +207,14 @@ class QuantumNativeTrainer:
         quantum_predictions = model.quantum_predict_batch(X)
         return np.mean(quantum_predictions == y)
     
-    def _validate_dataset(self, X: np.ndarray, y: np.ndarray, n_qubits: int):
+    def _validate_dataset(self, X: np.ndarray, y: np.ndarray, model: 'PureQuantumNativeCNN'):
         """
         Validate dataset compatibility with quantum circuit requirements.
 
         Args:
             X: Feature array
             y: Label array
-            n_qubits: Number of qubits in the circuit
+            model: The QCNN model instance
 
         Raises:
             ValueError if validation fails
@@ -222,12 +222,29 @@ class QuantumNativeTrainer:
         if X.shape[0] != y.shape[0]:
             raise ValueError(f"Sample count mismatch: X has {X.shape[0]}, y has {y.shape[0]}")
         
-        if X.shape[1] != n_qubits:
-            raise ValueError(
-                f"Feature count {X.shape[1]} doesn't match n_qubits {n_qubits}. "
-                f"Please preprocess your data using dataset_loader.load_dataset() or "
-                f"data_preprocessing.preprocess_for_quantum()"
-            )
+        encoding = model.config.encoding_type
+        n_qubits = model.config.n_qubits
+        
+        if encoding == 'patch':
+            # In patch mode, X should be 3D (n_samples, h, w)
+            if X.ndim != 3:
+                raise ValueError(f"Patch encoding expects 3D array (n_samples, h, w), got {X.shape}")
+            if X.shape[1] != model.config.image_size or X.shape[2] != model.config.image_size:
+                print(f"Warning: Image size {X.shape[1:]} doesn't match config {model.config.image_size}")
+        
+        elif encoding == 'amplitude':
+            # In amplitude mode, X.shape[1] should be 2^n_qubits
+            expected = 2 ** n_qubits
+            if X.shape[1] != expected:
+                raise ValueError(f"Amplitude encoding expects {expected} features for {n_qubits} qubits, got {X.shape[1]}")
+        
+        else:
+            # feature_map: 1 qubit per feature
+            if X.shape[1] != n_qubits:
+                raise ValueError(
+                    f"Feature count {X.shape[1]} doesn't match n_qubits {n_qubits}. "
+                    f"Please preprocess your data correctly for 'feature_map' encoding."
+                )
         
         if not np.all((X >= -0.1) & (X <= 2 * np.pi + 0.1)):
             print(f"Warning: Features should be in [0, 2π] range for quantum encoding. "
