@@ -1,14 +1,17 @@
 from .QConv import QuantumNativeConvolution
 from .QPool import QuantumNativePooling
+from .QuanvLayer import QuanvolutionalLayer
 
 __all__ = [
     "QuantumNativeConvolution",
-    "QuantumNativePooling"
+    "QuantumNativePooling",
+    "QuanvolutionalLayer"
 ]
 
 LAYER_TYPES = {
     "convolution": QuantumNativeConvolution,
-    "pooling": QuantumNativePooling
+    "pooling": QuantumNativePooling,
+    "quanvolutional": QuanvolutionalLayer
 }
 
 def get_conv_layer():

@@ -1,10 +1,12 @@
+import math
 import numpy as np
 import pennylane as qml
 import pennylane.numpy as pnp
 from QCNN.config import QuantumNativeConfig
 from QCNN.layers import QuantumNativeConvolution
+from QCNN.layers import QuantumNativePooling
+from QCNN.layers import QuanvolutionalLayer
 from QCNN.encoding import PureQuantumEncoder
-from QCNN.layers import QuantumNativePooling  # Import pooling from layers
 
 
 class PureQuantumNativeCNN:
@@ -30,11 +32,22 @@ class PureQuantumNativeCNN:
         # Store number of qubits for parameter calculation
         self.num_qubits = config.n_qubits
 
+        # Initialize quanvolutional layer if using patch-based encoding
+        self.quanv_layer = None
+        if config.encoding_type == 'patch':
+            self.quanv_layer = QuanvolutionalLayer(
+                patch_size=config.patch_size,
+                n_filters=config.n_quanv_filters,
+                stride=config.patch_stride,
+                device_name='default.qubit',  # Lighter device for preprocessing
+                random_params=True
+            )
+
         # Initialize pure quantum parameters
         self.quantum_params = self._initialize_quantum_parameters()
 
         # Create pure quantum circuit with explicit QNode decorator for differentiation
-        @qml.qnode(self.device, interface='autograd')  # interface='jax')
+        @qml.qnode(self.device, interface='autograd')
         def quantum_circuit(x, flat_params):
             # Unflatten parameters from flat vector
             params = self._unflatten_params(flat_params)
@@ -131,8 +144,13 @@ class PureQuantumNativeCNN:
         Applies encoding, convolution, pooling, and shallow classification
         before returning the expectation value ⟨Z⟩ on the readout qubit.
 
+        Supports three encoding strategies:
+          - 'feature_map': 1 qubit per feature (original)
+          - 'amplitude': log₂(features) qubits via amplitude embedding
+          - 'patch': data already reduced by quanvolutional layer, use amplitude
+
         Args:
-            x: input classical 4×4 data sample
+            x: input data sample (already preprocessed for the encoding type)
             params: structured parameter dictionary for all QCNN layers
 
         Returns:
@@ -141,9 +159,11 @@ class PureQuantumNativeCNN:
         all_qubits = list(range(self.config.n_qubits))
 
         # Step 1: Pure quantum data encoding
-        if self.config.encoding_type == 'amplitude':
+        if self.config.encoding_type in ('amplitude', 'patch'):
+            # Amplitude encoding: x has 2^n_qubits features → n_qubits qubits
             PureQuantumEncoder.amplitude_encoding(x, all_qubits)
         else:
+            # Feature map: 1 qubit per feature
             PureQuantumEncoder.quantum_feature_map(x, all_qubits)
 
         # Step 2: Quantum convolutional layers and pooling
@@ -211,18 +231,47 @@ class PureQuantumNativeCNN:
         # Measurement
         return qml.expval(qml.PauliZ(active_qubits[0]))
 
+    def _preprocess_input(self, x: np.ndarray) -> np.ndarray:
+        """
+        Apply encoding-specific preprocessing to a single input sample.
+
+        For 'patch' encoding: apply quanvolutional layer to extract features.
+        For 'amplitude': pad to nearest power of 2 if needed.
+        For 'feature_map': pass through as-is.
+
+        Args:
+            x: raw input sample
+
+        Returns:
+            Preprocessed sample ready for the quantum circuit.
+        """
+        if self.config.encoding_type == 'patch' and self.quanv_layer is not None:
+            # Apply quanvolutional preprocessing
+            return self.quanv_layer.process_image(x)
+        elif self.config.encoding_type == 'amplitude':
+            # Ensure length is power of 2 for amplitude encoding
+            target_len = 2 ** self.num_qubits
+            if len(x) < target_len:
+                padded = np.zeros(target_len)
+                padded[:len(x)] = x
+                return padded
+            return x[:target_len]
+        else:
+            return x
+
     def quantum_predict_single(self, x: np.ndarray) -> float:
         """
         Predict ⟨Z⟩ for a single sample using the pure quantum circuit.
 
         Args:
-            x: input 4×4 sample
+            x: input sample (any size, will be preprocessed)
 
         Returns:
             float: expectation value of the readout qubit.
         """
+        x_processed = self._preprocess_input(x)
         flat_params = self._flatten_params(self.quantum_params)
-        return self.quantum_circuit(x, flat_params)
+        return self.quantum_circuit(x_processed, flat_params)
 
     def quantum_predict_batch(self, X: np.ndarray) -> np.ndarray:
         """
