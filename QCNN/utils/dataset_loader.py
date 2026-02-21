@@ -252,7 +252,12 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
             elif source.endswith('.csv'):
                 dataset_type = 'csv'
             elif os.path.isdir(source):
-                dataset_type = 'images'
+                # Check if it's an images directory or an MNIST IDX directory
+                files = os.listdir(source)
+                if any('idx3' in f and 'images' in f for f in files):
+                    dataset_type = 'idx'
+                else:
+                    dataset_type = 'images'
             else:
                 raise ValueError(f"Cannot auto-detect dataset type for: {source}")
         else:
@@ -312,9 +317,6 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     
     elif dataset_type == 'mnist':
         X, y = load_mnist_subset(**kwargs)
-    
-    elif dataset_type == 'npz':
-        X, y = load_npz_dataset(source)
     
     elif dataset_type == 'array' and X is None:
         X, y = source
