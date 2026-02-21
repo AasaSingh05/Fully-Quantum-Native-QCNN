@@ -201,7 +201,7 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
-    parser.add_argument('--dataset', type=str, default='synthetic',
+    parser.add_argument('--dataset', type=str, default='images',
                        choices=['synthetic', 'npz', 'csv', 'mnist', 'images'],
                        help='Type of dataset to use')
     parser.add_argument('--path', type=str, default=None,
