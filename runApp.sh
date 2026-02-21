@@ -2,7 +2,7 @@
 
 # If the first argument is a flag (starts with --), use defaults for positional arguments
 if [[ "$1" == --* ]]; then
-    echo "💡 Detected flags. Using default dataset (MNIST/auto)..."
+    echo "Detected flags. Using default dataset (MNIST/auto)..."
     ./.venv/bin/python main.py \
         --dataset "auto" \
         --path "datasets/MNIST" \
@@ -35,11 +35,11 @@ CLASS_B="${6:-1}"
 
 # Run main python script using the project virtual environment
 echo "------------------------------------------------"
-echo "🚀 Quantum Native QCNN - Training Launcher"
+echo "Quantum Native QCNN - Training Launcher"
 echo "------------------------------------------------"
-echo "📁 Dataset: $DATASET_PATH ($DATASET_TYPE)"
-echo "🧬 Encoding: $ENCODING (Size: $IMAGE_SIZE)"
-echo "🎯 Classes: $CLASS_A vs $CLASS_B"
+echo "Dataset: $DATASET_PATH ($DATASET_TYPE)"
+echo "Encoding: $ENCODING (Size: $IMAGE_SIZE)"
+echo "Classes: $CLASS_A vs $CLASS_B"
 echo "------------------------------------------------"
 
 ./.venv/bin/python main.py \

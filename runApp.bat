@@ -7,7 +7,7 @@ setlocal enabledelayedexpansion
 :: Handle flags passed as first argument
 set "first_arg=%~1"
 if "!first_arg:~0,2!"=="--" (
-    echo 💡 Detected flags. Using default dataset (MNIST/auto)...
+    echo Detected flags. Using default dataset (MNIST/auto)...
     python main.py --dataset auto --path datasets/MNIST --encoding auto --image-size 28 --classes 0 1 --no-profile %*
     exit /b %errorlevel%
 )
@@ -40,11 +40,11 @@ shift
 shift
 
 echo ------------------------------------------------
-echo 🚀 Quantum Native QCNN - Training Launcher (Win)
+echo Quantum Native QCNN - Training Launcher (Win)
 echo ------------------------------------------------
-echo 📁 Dataset: %DATASET_PATH% (%DATASET_TYPE%)
-echo 🧬 Encoding: %ENCODING% (Size: %IMAGE_SIZE%)
-echo 🎯 Classes: %CLASS_A% vs %CLASS_B%
+echo Dataset: %DATASET_PATH% (%DATASET_TYPE%)
+echo Encoding: %ENCODING% (Size: %IMAGE_SIZE%)
+echo Classes: %CLASS_A% vs %CLASS_B%
 echo ------------------------------------------------
 
 :: Check for virtual environment

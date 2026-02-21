@@ -1,8 +1,8 @@
-# 📖 QCNN Dataset Running Guide
+# QCNN Dataset Running Guide
 
 This project supports a wide range of formats. Follow this guide to run the training on your data.
 
-## 📁 Standard Folder Structure
+## Standard Folder Structure
 Place your datasets in the `datasets/` folder (created at the project root).
 ```text
 datasets/
@@ -11,17 +11,17 @@ datasets/
 └── your_data.npz       <-- NumPy compressed data
 ```
 
-## 🚀 Running Training
+## Running Training
 This project provides launchers for both Linux/macOS and Windows.
 
-### 🐧 Linux / macOS / WSL
+### Linux / macOS / WSL
 Use the shell script:
 ```bash
 # Runs matching (0 vs 1) from datasets/MNIST
 ./runApp.sh
 ```
 
-### 🪟 Windows (Command Prompt / PowerShell)
+### Windows (Command Prompt / PowerShell)
 Use the batch script:
 ```batch
 # Runs matching (0 vs 1) from datasets\MNIST
@@ -30,7 +30,7 @@ runApp.bat
 
 ---
 
-## 📂 Dataset Examples
+## Dataset Examples
 The loaders will automatically find your data.
 
 ### 2. Run specific digits
@@ -52,7 +52,7 @@ Ensure your images are in `datasets/images/class_A` and `datasets/images/class_B
 
 ---
 
-## 🛠️ Advanced Usage (`main.py`)
+## Advanced Usage (main.py)
 You can use the Python script directly for full control:
 ```bash
 python main.py --dataset idx --path datasets/MNIST --classes 0 1 --samples 100 --encoding patch
