@@ -11,15 +11,27 @@ datasets/
 └── your_data.npz       <-- NumPy compressed data
 ```
 
-## 🚀 Running with `runApp.sh`
-The easiest way to run training is using the provided shell script.
+## 🚀 Running Training
+This project provides launchers for both Linux/macOS and Windows.
 
-### 1. Run your provided MNIST dataset (IDX format)
-The script now defaults to your `datasets/MNIST` folder!
+### 🐧 Linux / macOS / WSL
+Use the shell script:
 ```bash
 # Runs matching (0 vs 1) from datasets/MNIST
 ./runApp.sh
 ```
+
+### 🪟 Windows (Command Prompt / PowerShell)
+Use the batch script:
+```batch
+# Runs matching (0 vs 1) from datasets\MNIST
+runApp.bat
+```
+
+---
+
+## 📂 Dataset Examples
+The loaders will automatically find your data.
 
 ### 2. Run specific digits
 ```bash
