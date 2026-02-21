@@ -14,8 +14,8 @@ implementationTests/*
 #Results
 # Results/*
 # Results/
-quantum_training_log(BEST).txt
-quantum_training_log.txt
-quantum_training_log1.txt
+training_log.txt
+
+
 # output.txt
 datasets/

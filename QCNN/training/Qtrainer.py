@@ -94,87 +94,98 @@ class QuantumNativeTrainer:
             self._validate_dataset(X_train, y_train, model)
             self._validate_dataset(X_test, y_test, model)
         
-        with open(log_filepath, 'w') as log_file:
-            log_file.write("Starting Training\n")
-            log_file.write("="*50 + "\n")
+        print("Starting Training")
+        print("="*50)
 
-            best_accuracy = 0
-            best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
+        best_accuracy = 0
+        best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
+        
+        # Flatten initial parameters for optimizer
+        params_flat = model._flatten_params(model.quantum_params)
+        n_epochs = model.config.n_epochs
+        
+        for epoch in range(n_epochs):
+            epoch_start = time.time()
             
-            # Flatten initial parameters for optimizer
-            params_flat = model._flatten_params(model.quantum_params)
-            n_epochs = model.config.n_epochs
+            indices = np.random.permutation(len(X_train))
+            X_shuffled = X_train[indices]
+            y_shuffled = y_train[indices]
             
-            for epoch in range(n_epochs):
-                epoch_start = time.time()
+            epoch_quantum_loss = 0.0
+            n_quantum_batches = 0
+            
+            for i in range(0, len(X_train), model.config.batch_size):
+                batch_end = min(i + model.config.batch_size, len(X_train))
+                X_quantum_batch = X_shuffled[i:batch_end]
+                y_quantum_batch = y_shuffled[i:batch_end]
                 
-                indices = np.random.permutation(len(X_train))
-                X_shuffled = X_train[indices]
-                y_shuffled = y_train[indices]
+                def quantum_cost(params):
+                    model.quantum_params = model._unflatten_params(params)
+                    if self.use_bce:
+                        # Compute BCE on mapped probabilities
+                        preds = [model.quantum_predict_single(x) for x in X_quantum_batch]
+                        loss = self._bce_loss(preds, y_quantum_batch)
+                    else:
+                        # Original MSE on expectation values vs {-1,1} labels
+                        loss = model.quantum_loss_function(X_quantum_batch, y_quantum_batch)
+                    return loss
                 
-                epoch_quantum_loss = 0.0
-                n_quantum_batches = 0
-                
-                for i in range(0, len(X_train), model.config.batch_size):
-                    batch_end = min(i + model.config.batch_size, len(X_train))
-                    X_quantum_batch = X_shuffled[i:batch_end]
-                    y_quantum_batch = y_shuffled[i:batch_end]
-                    
-                    def quantum_cost(params):
-                        model.quantum_params = model._unflatten_params(params)
-                        if self.use_bce:
-                            # Compute BCE on mapped probabilities
-                            preds = [model.quantum_predict_single(x) for x in X_quantum_batch]
-                            loss = self._bce_loss(preds, y_quantum_batch)
-                        else:
-                            # Original MSE on expectation values vs {-1,1} labels
-                            loss = model.quantum_loss_function(X_quantum_batch, y_quantum_batch)
-                        return loss
-                    
-                    param_norm_before = pnp.linalg.norm(params_flat)
-                    params_flat = self.quantum_optimizer.step(quantum_cost, params_flat)
-                    param_norm_after = pnp.linalg.norm(params_flat)
+                param_norm_before = pnp.linalg.norm(params_flat)
+                params_flat = self.quantum_optimizer.step(quantum_cost, params_flat)
+                param_norm_after = pnp.linalg.norm(params_flat)
 
-                    batch_loss = quantum_cost(params_flat)
-                    epoch_quantum_loss += batch_loss
-                    n_quantum_batches += 1
+                batch_loss = quantum_cost(params_flat)
+                epoch_quantum_loss += batch_loss
+                n_quantum_batches += 1
 
-                    quantum_outputs = [model.quantum_predict_single(x) for x in X_quantum_batch]
-                    quantum_outputs = np.array(quantum_outputs)
-                    
-                    # Log diagnostic info to file
-                    log_file.write(
-                        f"\nEpoch {epoch+1} Batch {i//model.config.batch_size+1} quantum output stats:\n"
-                        f"  min: {quantum_outputs.min()}, max: {quantum_outputs.max()}, "
-                        f"mean: {quantum_outputs.mean()}, std: {quantum_outputs.std()}\n"
-                        f"Batch param norm before step: {param_norm_before}\n"
-                        f"Batch param norm after step: {param_norm_after}\n"
-                    )
+                quantum_outputs = [model.quantum_predict_single(x) for x in X_quantum_batch]
+                quantum_outputs = np.array(quantum_outputs)
                 
-                avg_loss = epoch_quantum_loss / max(1, n_quantum_batches)
-                model.quantum_params = model._unflatten_params(params_flat)
-                
-                # Compute accuracies; limit train accuracy sample size for speed
-                train_accuracy = self._compute_quantum_accuracy(model, X_train[:50], y_train[:50])
-                test_accuracy = self._compute_quantum_accuracy(model, X_test, y_test)
-                
-                model.training_history['loss'].append(float(avg_loss))
-                model.training_history['accuracy'].append(float(test_accuracy))
-                
-                if test_accuracy > best_accuracy:
-                    best_accuracy = test_accuracy
-                    best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
-                
-                progress_percent = ((epoch + 1) / n_epochs) * 100
-                elapsed = time.time() - epoch_start
-                estimated_total = elapsed / ((epoch + 1) / n_epochs)
-                remaining = estimated_total - elapsed
-                
-                log_file.write(
-                    f"Epoch {epoch+1}/{n_epochs} | Loss={avg_loss:.4f} | "
-                    f"Train Acc={train_accuracy:.3f} | Test Acc={test_accuracy:.3f} | "
-                    f"Progress={progress_percent:.1f}% | ETA={remaining:.1f}s\n"
+                # Print diagnostic info (captured by Logger)
+                print(
+                    f"\nEpoch {epoch+1} Batch {i//model.config.batch_size+1} stats:"
+                    f" min: {quantum_outputs.min():.3f}, max: {quantum_outputs.max():.3f}, "
+                    f"mean: {quantum_outputs.mean():.3f}"
                 )
+            
+            avg_loss = epoch_quantum_loss / max(1, n_quantum_batches)
+            model.quantum_params = model._unflatten_params(params_flat)
+            
+            # Compute accuracies; limit train accuracy sample size for speed
+            train_accuracy = self._compute_quantum_accuracy(model, X_train[:50], y_train[:50])
+            test_accuracy = self._compute_quantum_accuracy(model, X_test, y_test)
+            
+            model.training_history['loss'].append(float(avg_loss))
+            model.training_history['accuracy'].append(float(test_accuracy))
+            
+            if test_accuracy > best_accuracy:
+                best_accuracy = test_accuracy
+                best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
+            
+            progress_percent = ((epoch + 1) / n_epochs) * 100
+            elapsed = time.time() - epoch_start
+            estimated_total = elapsed / ((epoch + 1) / n_epochs)
+            remaining = estimated_total - elapsed
+            
+            print(
+                f"\n--- Epoch {epoch+1}/{n_epochs} Summary ---"
+            )
+            print(
+                f"  Loss: {avg_loss:.4f}"
+            )
+            print(
+                f"  Train Accuracy: {train_accuracy:.1%}"
+            )
+            print(
+                f"  Test Accuracy: {test_accuracy:.1%}"
+            )
+            print(
+                f"  Progress: {progress_percent:.1f}%"
+            )
+            print(
+                f"  ETA: {remaining:.1f}s"
+            )
+            print("-" * 30)
         
         # Restore best quantum parameters
         model.quantum_params = best_quantum_params
