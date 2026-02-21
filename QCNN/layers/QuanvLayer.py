@@ -16,7 +16,7 @@ class QuanvolutionalLayer:
     """
 
     def __init__(self, patch_size: int = 4, n_filters: int = 4,
-                 stride: int = 4, device_name: str = 'default.qubit',
+                 stride: int = 4, device_name: str = 'lightning.qubit',
                  random_params: bool = True, seed: int = 42):
         """
         Args:

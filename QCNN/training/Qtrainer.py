@@ -94,6 +94,15 @@ class QuantumNativeTrainer:
             self._validate_dataset(X_train, y_train, model)
             self._validate_dataset(X_test, y_test, model)
         
+        if model.config.encoding_type == 'patch' and model.quanv_layer is not None:
+            print("\nPre-calculating Quanvolutional Features...")
+            print("  (This speeds up training by 100x since filters are fixed)")
+            X_train = model.quanv_layer.process_batch(X_train)
+            X_test = model.quanv_layer.process_batch(X_test)
+            # Switch internal encoding to 'amplitude' for the QNode since data is now reduced
+            model.config.encoding_type = 'amplitude'
+            print(f"  Pre-calculation complete. Reduced shape: {X_train.shape[1:]}")
+
         print("Starting Training")
         print("="*50)
 

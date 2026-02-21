@@ -39,15 +39,15 @@ class PureQuantumNativeCNN:
                 patch_size=config.patch_size,
                 n_filters=config.n_quanv_filters,
                 stride=config.patch_stride,
-                device_name='default.qubit',  # Lighter device for preprocessing
+                device_name='lightning.qubit',  # Faster device
                 random_params=True
             )
 
         # Initialize pure quantum parameters
         self.quantum_params = self._initialize_quantum_parameters()
 
-        # Create pure quantum circuit with explicit QNode decorator for differentiation
-        @qml.qnode(self.device, interface='autograd')
+        # Create pure quantum circuit with high-performance adjoint differentiation
+        @qml.qnode(self.device, interface='autograd', diff_method='adjoint')
         def quantum_circuit(x, flat_params):
             # Unflatten parameters from flat vector
             params = self._unflatten_params(flat_params)

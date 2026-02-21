@@ -1,0 +1,188 @@
+Entered main() function.
+
+Step 1: Initializing Quantum Configuration...
+ Configuration: 8 qubits, 4 quantum layers
+ Encoding: patch
+ Image Size: 28x28
+ Training: 100 epochs, lr=0.005
+
+Step 2: Loading Data (auto)...
+Loading idx dataset from source...
+Loading IDX dataset from train-images.idx3-ubyte and train-labels.idx1-ubyte...
+Filtering for binary classes: (0, 1)
+Loaded dataset: 12665 samples, (784,) features
+Label distribution: {np.uint8(0): np.int64(5923), np.uint8(1): np.int64(6742)}
+Preprocessed for quantum: (12665, 28, 28), labels: [-1  1]
+  Limiting initial dataset to 40 samples for efficiency...
+Dataset ready.
+  Detected high resolution ((28, 28)). Downsampling for quantum efficiency...
+  New resolution: (14, 14)
+Shape: (40, 14, 14)
+Class distribution: {np.int64(-1): np.int64(21), np.int64(1): np.int64(19)}
+ Training samples used: 20
+ Test samples: 12
+ Class distribution (training): {np.int64(-1): np.int64(11), np.int64(1): np.int64(9)}
+
+ Step 3: Initializing Pure Quantum CNN...
+ Quantum parameters: 52
+ Hilbert space: 2^8 = 256 dimensions
+
+ Step 4: Training Pure Quantum CNN...
+
+Pre-calculating Quanvolutional Features...
+  (This speeds up training by 100x since filters are fixed)
+  Pre-calculation complete. Reduced shape: (36,)
+Starting Training
+==================================================
+
+Epoch 1 Batch 1 stats: min: 0.993, max: 0.993, mean: 0.993
+
+Epoch 1 Batch 2 stats: min: 0.990, max: 0.990, mean: 0.990
+
+--- Epoch 1/100 Summary ---
+  Loss: 1.7364
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 1.0%
+  ETA: 415.9s
+------------------------------
+
+Epoch 2 Batch 1 stats: min: 0.987, max: 0.987, mean: 0.987
+
+Epoch 2 Batch 2 stats: min: 0.983, max: 0.983, mean: 0.983
+
+--- Epoch 2/100 Summary ---
+  Loss: 2.0937
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 2.0%
+  ETA: 212.7s
+------------------------------
+
+Epoch 3 Batch 1 stats: min: 0.978, max: 0.979, mean: 0.979
+
+Epoch 3 Batch 2 stats: min: 0.974, max: 0.974, mean: 0.974
+
+--- Epoch 3/100 Summary ---
+  Loss: 2.4403
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 3.0%
+  ETA: 132.0s
+------------------------------
+
+Epoch 4 Batch 1 stats: min: 0.968, max: 0.969, mean: 0.969
+
+Epoch 4 Batch 2 stats: min: 0.963, max: 0.963, mean: 0.963
+
+--- Epoch 4/100 Summary ---
+  Loss: 2.4141
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 4.0%
+  ETA: 96.3s
+------------------------------
+
+Epoch 5 Batch 1 stats: min: 0.955, max: 0.957, mean: 0.956
+
+Epoch 5 Batch 2 stats: min: 0.949, max: 0.950, mean: 0.949
+
+--- Epoch 5/100 Summary ---
+  Loss: 2.0275
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 5.0%
+  ETA: 80.1s
+------------------------------
+
+Epoch 6 Batch 1 stats: min: 0.940, max: 0.943, mean: 0.942
+
+Epoch 6 Batch 2 stats: min: 0.933, max: 0.934, mean: 0.934
+
+--- Epoch 6/100 Summary ---
+  Loss: 1.9967
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 6.0%
+  ETA: 73.4s
+------------------------------
+
+Epoch 7 Batch 1 stats: min: 0.923, max: 0.926, mean: 0.925
+
+Epoch 7 Batch 2 stats: min: 0.916, max: 0.917, mean: 0.916
+
+--- Epoch 7/100 Summary ---
+  Loss: 1.6202
+  Train Accuracy: 45.0%
+  Test Accuracy: 50.0%
+  Progress: 7.0%
+  ETA: 49.3s
+------------------------------
+
+Epoch 8 Batch 1 stats: min: 0.905, max: 0.907, mean: 0.906
+
+Epoch 8 Batch 2 stats: min: 0.893, max: 0.896, mean: 0.894
+Traceback (most recent call last):
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/main.py", line 264, in <module>
+    model, acc = main(
+                 ~~~~^
+        train_sample_size=args.samples,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        log_file=args.log_file
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/main.py", line 175, in main
+    trained_model = trainer.train_pure_quantum_cnn(
+        quantum_model, X_train, y_train, X_test, y_test
+    )
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/QCNN/training/Qtrainer.py", line 164, in train_pure_quantum_cnn
+    train_accuracy = self._compute_quantum_accuracy(model, X_train[:50], y_train[:50])
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/QCNN/training/Qtrainer.py", line 227, in _compute_quantum_accuracy
+    quantum_predictions = model.quantum_predict_batch(X)
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/QCNN/models/QCNNModel.py", line 288, in quantum_predict_batch
+    quantum_output = self.quantum_predict_single(x)
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/QCNN/models/QCNNModel.py", line 274, in quantum_predict_single
+    return self.quantum_circuit(x_processed, flat_params)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/workflow/qnode.py", line 863, in __call__
+    return self._impl_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/workflow/qnode.py", line 836, in _impl_call
+    res = execute(
+        (tape,),
+    ...<5 lines>...
+        **self.execute_kwargs,
+    )
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/workflow/execution.py", line 229, in execute
+    config = _resolve_execution_config(config, device, tapes)
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/workflow/resolution.py", line 297, in _resolve_execution_config
+    execution_config = _resolve_diff_method(execution_config, device, tape=tapes[0])
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/logging/decorators.py", line 61, in wrapper_entry
+    return func(*args, **kwargs)
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/workflow/resolution.py", line 235, in _resolve_diff_method
+    if device.supports_derivatives(initial_config, circuit=tape):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane_lightning/lightning_qubit/lightning_qubit.py", line 479, in supports_derivatives
+    return _supports_adjoint(circuit=circuit, device_wires=self.wires)
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane_lightning/lightning_qubit/lightning_qubit.py", line 130, in _supports_adjoint
+    _add_adjoint_transforms(prog, device_wires=device_wires)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane_lightning/lightning_qubit/lightning_qubit.py", line 172, in _add_adjoint_transforms
+    pipeline.add_transform(
+    ~~~~~~~~~~~~~~~~~~~~~~^
+        validate_measurements, analytic_measurements=adjoint_measurements, name=name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/transforms/core/compile_pipeline.py", line 479, in add_transform
+    self.append(BoundTransform(transform, args=targs, kwargs=tkwargs))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/transforms/core/compile_pipeline.py", line 438, in append
+    if self.has_final_transform and transform.is_final_transform:
+       ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bigmannova/Codes/Quantum/Fully-Quantum-Native-QCNN/.venv/lib/python3.14/site-packages/pennylane/transforms/core/compile_pipeline.py", line 524, in has_final_transform
+    @property
+    
+KeyboardInterrupt

@@ -117,18 +117,7 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
     
     else:
         # Load custom dataset
-        print(f"\nLoading custom dataset (type: {dataset_type})...")
-        
-        if dataset_path is None:
-            raise ValueError("dataset_path must be provided for custom datasets")
-        
-        # Check if dataset_path exists, if not look in 'datasets/' folder
-        if not os.path.isabs(dataset_path) and not os.path.exists(dataset_path):
-            alt_path = os.path.join("datasets", dataset_path)
-            if os.path.exists(alt_path):
-                print(f"Dataset found in 'datasets/' folder: {alt_path}")
-                dataset_path = alt_path
-        
+        print(f"\nStep 2: Loading Data ({dataset_type})...")
         X_quantum, y_quantum = load_dataset(
             source=dataset_path,
             dataset_type=dataset_type,
@@ -138,8 +127,23 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
             encoding_type=config.encoding_type,
             classes=tuple(args.classes)
         )
+
+        # If samples flag is provided, limit the initial dataset so the test set is also small
+        if train_sample_size is not None and len(X_quantum) > train_sample_size * 2:
+            print(f"  Limiting initial dataset to {train_sample_size * 2} samples for efficiency...")
+            indices = np.random.choice(len(X_quantum), train_sample_size * 2, replace=False)
+            X_quantum = X_quantum[indices]
+            y_quantum = y_quantum[indices]
     
     print("Dataset ready.")
+    # Auto-downsample if resolution is too high (> 16x16)
+    if X_quantum.ndim == 3 and X_quantum.shape[1] > 16:
+        print(f"  Detected high resolution ({X_quantum.shape[1:]}). Downsampling for quantum efficiency...")
+        # Simple 2x2 mean pooling downsampling
+        h, w = X_quantum.shape[1], X_quantum.shape[2]
+        X_quantum = X_quantum[:, :h//2*2, :w//2*2].reshape(-1, h//2, 2, w//2, 2).mean(axis=(2, 4))
+        config.image_size = h // 2
+        print(f"  New resolution: {X_quantum.shape[1:]}")
     print(f"Shape: {X_quantum.shape}")
     print(f"Class distribution: {dict(zip(*np.unique(y_quantum, return_counts=True)))}")
 
