@@ -203,7 +203,7 @@ if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
     parser.add_argument('--dataset', type=str, default='images',
-                       choices=['synthetic', 'npz', 'csv', 'mnist', 'images', 'idx'],
+                       choices=['auto', 'synthetic', 'npz', 'csv', 'mnist', 'images', 'idx'],
                        help='Type of dataset to use')
     parser.add_argument('--path', type=str, default=None,
                        help='Path to custom dataset file or directory')
