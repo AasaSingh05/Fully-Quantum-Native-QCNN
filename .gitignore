@@ -18,4 +18,6 @@ training_log.txt
 
 
 # output.txt
-datasets/
+datasets/images/*
+datasets/*.*
+datasets/MNIST/
