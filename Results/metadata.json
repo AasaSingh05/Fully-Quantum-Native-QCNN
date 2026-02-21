@@ -1,0 +1,30 @@
+{
+    "config": {
+        "image_size": 2,
+        "n_qubits": 4,
+        "n_classes": 2,
+        "n_features": 4,
+        "preprocessing_mode": "minmax",
+        "encoding_type": "feature_map",
+        "n_conv_layers": 3,
+        "kernel_size": 2,
+        "patch_size": 4,
+        "patch_stride": 4,
+        "n_quanv_filters": 4,
+        "quanv_qubits": 16,
+        "learning_rate": 0.005,
+        "n_epochs": 100,
+        "batch_size": 16,
+        "device": "lightning.qubit",
+        "shots": null
+    },
+    "python_version": "3.14.3",
+    "numpy_version": "2.4.2",
+    "packages": {
+        "pennylane": "0.44.0",
+        "numpy": "2.4.2",
+        "scikit-learn": "1.8.0",
+        "matplotlib": "3.10.8"
+    },
+    "seed": 42
+}

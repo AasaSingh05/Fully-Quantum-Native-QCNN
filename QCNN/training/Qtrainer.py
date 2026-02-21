@@ -91,8 +91,8 @@ class QuantumNativeTrainer:
         """
         # Validate dataset compatibility with quantum circuit
         if validate_data:
-            self._validate_dataset(X_train, y_train, model.config.n_qubits)
-            self._validate_dataset(X_test, y_test, model.config.n_qubits)
+            self._validate_dataset(X_train, y_train, model)
+            self._validate_dataset(X_test, y_test, model)
         
         with open(log_filepath, 'w') as log_file:
             log_file.write("Starting Training\n")

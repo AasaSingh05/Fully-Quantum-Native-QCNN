@@ -96,6 +96,13 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
         if dataset_path is None:
             raise ValueError("dataset_path must be provided for custom datasets")
         
+        # Check if dataset_path exists, if not look in 'datasets/' folder
+        if not os.path.isabs(dataset_path) and not os.path.exists(dataset_path):
+            alt_path = os.path.join("datasets", dataset_path)
+            if os.path.exists(alt_path):
+                print(f"Dataset found in 'datasets/' folder: {alt_path}")
+                dataset_path = alt_path
+        
         X_quantum, y_quantum = load_dataset(
             source=dataset_path,
             dataset_type=dataset_type,
@@ -194,11 +201,22 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
+    parser.add_argument('--dataset', type=str, default='synthetic',
+                       choices=['synthetic', 'npz', 'csv', 'mnist', 'images'],
+                       help='Type of dataset to use')
+    parser.add_argument('--path', type=str, default=None,
+                       help='Path to custom dataset file or directory')
+    parser.add_argument('--samples', type=int, default=None,
+                       help='Number of training samples to use')
+    parser.add_argument('--use-bce', action='store_true',
+                       help='Use Binary Cross Entropy loss (default is MSE)')
     parser.add_argument('--encoding', type=str, default='auto',
                        choices=['auto', 'feature_map', 'amplitude', 'patch'],
                        help='Encoding strategy to use')
     parser.add_argument('--image-size', type=int, default=None,
                        help='Width/height of square input images')
+    parser.add_argument('--no-profile', action='store_true',
+                       help='Disable cProfile performance profiling')
     
     args = parser.parse_args()
     
