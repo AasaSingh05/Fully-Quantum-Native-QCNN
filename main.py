@@ -109,7 +109,8 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
             n_qubits=config.n_qubits,
             image_size=config.image_size,
             normalization=config.preprocessing_mode,
-            encoding_type=config.encoding_type
+            encoding_type=config.encoding_type,
+            classes=tuple(args.classes)
         )
     
     print("Dataset ready.")
@@ -202,7 +203,7 @@ if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
     parser.add_argument('--dataset', type=str, default='images',
-                       choices=['synthetic', 'npz', 'csv', 'mnist', 'images'],
+                       choices=['synthetic', 'npz', 'csv', 'mnist', 'images', 'idx'],
                        help='Type of dataset to use')
     parser.add_argument('--path', type=str, default=None,
                        help='Path to custom dataset file or directory')
@@ -215,6 +216,8 @@ if __name__ == "__main__":
                        help='Encoding strategy to use')
     parser.add_argument('--image-size', type=int, default=None,
                        help='Width/height of square input images')
+    parser.add_argument('--classes', type=int, nargs=2, default=[0, 1],
+                       help='Two classes to use for binary classification (default: 0 1)')
     parser.add_argument('--no-profile', action='store_true',
                        help='Disable cProfile performance profiling')
     

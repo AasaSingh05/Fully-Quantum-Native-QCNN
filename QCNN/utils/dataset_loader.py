@@ -1,6 +1,7 @@
 import numpy as np
 import os
 from typing import Tuple, Optional, Union
+import struct
 from pathlib import Path
 from .data_preprocessing import preprocess_for_quantum
 
@@ -143,6 +144,30 @@ def load_image_directory(directory: str,
     return X, y
 
 
+def load_idx_dataset(images_path: str, labels_path: str) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load MNIST dataset from IDX-UBYTE files.
+    
+    Args:
+        images_path: Path to the *-images-idx3-ubyte file
+        labels_path: Path to the *-labels-idx1-ubyte file
+        
+    Returns:
+        (X, y) tuple
+    """
+    print(f"Loading IDX dataset from {os.path.basename(images_path)} and {os.path.basename(labels_path)}...")
+    
+    with open(labels_path, 'rb') as lbpath:
+        magic, n = struct.unpack('>II', lbpath.read(8))
+        labels = np.fromfile(lbpath, dtype=np.uint8)
+
+    with open(images_path, 'rb') as imgpath:
+        magic, num, rows, cols = struct.unpack('>IIII', imgpath.read(16))
+        images = np.fromfile(imgpath, dtype=np.uint8).reshape(len(labels), 784)
+
+    return images, labels
+
+
 def load_mnist_subset(n_samples: int = 1000,
                      classes: Tuple[int, int] = (0, 1),
                      flatten: bool = True) -> Tuple[np.ndarray, np.ndarray]:
@@ -233,8 +258,49 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         else:
             raise ValueError("Auto-detection requires string path")
     
+    print(f"Loading {dataset_type} dataset from source...")
+    binary_classes = kwargs.get('classes', (0, 1))
+    
     # Load based on type
-    if dataset_type == 'npz':
+    if dataset_type == 'idx':
+        # If source is a directory, look for standard MNIST files
+        if os.path.isdir(source):
+            files = [f for f in os.listdir(source) if os.path.isfile(os.path.join(source, f))]
+            
+            # Try to find 'train' first, then 't10k', otherwise any matching pair
+            prefixes = ['train', 't10k', '']
+            images_file = None
+            labels_file = None
+            
+            for pref in prefixes:
+                images_file = next((f for f in files if pref in f and 'images' in f and 'idx3' in f), None)
+                labels_file = next((f for f in files if pref in f and 'labels' in f and 'idx1' in f), None)
+                if images_file and labels_file:
+                    break
+            
+            if not images_file or not labels_file:
+                raise FileNotFoundError(f"Could not find matching MNIST IDX files in {source}")
+                
+            X, y = load_idx_dataset(os.path.join(source, images_file), 
+                                  os.path.join(source, labels_file))
+        else:
+            # Assume source is images path, and look for labels path in kwargs
+            labels_path = kwargs.get('labels_path')
+            if not labels_path:
+                # If source ends in -images-idx3-ubyte, try to find -labels-idx1-ubyte
+                labels_path = source.replace('images-idx3', 'labels-idx1')
+                if not os.path.exists(labels_path):
+                    raise ValueError("labels_path must be provided for IDX datasets if source is just a file")
+            
+            X, y = load_idx_dataset(source, labels_path)
+            
+        # Filter for binary classification
+        print(f"Filtering for binary classes: {binary_classes}")
+        mask = (y == binary_classes[0]) | (y == binary_classes[1])
+        X = X[mask]
+        y = y[mask]
+    
+    elif dataset_type == 'npz':
         X, y = load_npz_dataset(source)
     
     elif dataset_type == 'csv':
@@ -246,6 +312,9 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     
     elif dataset_type == 'mnist':
         X, y = load_mnist_subset(**kwargs)
+    
+    elif dataset_type == 'npz':
+        X, y = load_npz_dataset(source)
     
     elif dataset_type == 'array' and X is None:
         X, y = source
