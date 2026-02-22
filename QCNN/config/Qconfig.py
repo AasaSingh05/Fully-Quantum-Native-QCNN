@@ -63,6 +63,12 @@ class QuantumNativeConfig:
         if encoding == 'feature_map':
             # 1 qubit per pixel
             self.n_qubits = self.n_features
+            if self.n_qubits > 25:
+                raise ValueError(
+                    f"Cannot simulate {self.n_qubits} qubits via 'feature_map' encoding. "
+                    "Classical simulation is bounded to ~25 qubits. "
+                    "Use 'amplitude' or 'patch' encoding, or downsample the image."
+                )
         
         elif encoding == 'amplitude':
             # log₂(features) qubits – pad features to nearest power of 2

@@ -1,11 +1,11 @@
 {
     "config": {
-        "image_size": 4,
-        "n_qubits": 16,
+        "image_size": 28,
+        "n_qubits": 10,
         "n_classes": 2,
-        "n_features": 16,
+        "n_features": 1024,
         "preprocessing_mode": "minmax",
-        "encoding_type": "feature_map",
+        "encoding_type": "amplitude",
         "n_conv_layers": 4,
         "kernel_size": 2,
         "patch_size": 4,

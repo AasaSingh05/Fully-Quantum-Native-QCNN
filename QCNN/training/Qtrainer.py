@@ -256,10 +256,10 @@ class QuantumNativeTrainer:
                 print(f"Warning: Image size {X.shape[1:]} doesn't match config {model.config.image_size}")
         
         elif encoding == 'amplitude':
-            # In amplitude mode, X.shape[1] should be 2^n_qubits
+            # In amplitude mode, X.shape[1] must be <= 2^n_qubits (QCNNModel handles padding)
             expected = 2 ** n_qubits
-            if X.shape[1] != expected:
-                raise ValueError(f"Amplitude encoding expects {expected} features for {n_qubits} qubits, got {X.shape[1]}")
+            if X.shape[1] > expected:
+                raise ValueError(f"Amplitude encoding expects at most {expected} features for {n_qubits} qubits, got {X.shape[1]}")
         
         else:
             # feature_map: 1 qubit per feature
