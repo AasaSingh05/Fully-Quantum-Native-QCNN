@@ -56,7 +56,7 @@ from QCNN.utils.metadata_logger import save_metadata
 print("Starting main execution script...")  # Debug to monitor re-imports
 
 
-def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type='synthetic', 
+def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
          encoding='auto', image_size=None, log_file="training_log.txt"):
     """Main execution function
     
@@ -239,8 +239,8 @@ if __name__ == "__main__":
                        help='Path to custom dataset file or directory')
     parser.add_argument('--samples', type=int, default=None,
                        help='Number of training samples to use')
-    parser.add_argument('--use-bce', action='store_true',
-                       help='Use Binary Cross Entropy loss (default is MSE)')
+    parser.add_argument('--use-mse', action='store_true',
+                       help='Use Mean Squared Error loss (default is BCE)')
     parser.add_argument('--encoding', type=str, default='auto',
                        choices=['auto', 'feature_map', 'amplitude', 'patch'],
                        help='Encoding strategy to use')
@@ -263,7 +263,7 @@ if __name__ == "__main__":
         # Run main with arguments
         model, acc = main(
             train_sample_size=args.samples,
-            use_bce=args.use_bce,
+            use_bce=not args.use_mse,
             dataset_path=args.path,
             dataset_type=args.dataset,
             encoding=args.encoding,

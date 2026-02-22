@@ -63,7 +63,8 @@ class QuantumNativeTrainer:
         Returns:
             scalar BCE loss
         """
-        z = pnp.clip(pnp.array(logits_or_expvals), -1.0, 1.0)
+        # Do not wrap logits_or_expvals in pnp.array() as it breaks the computational graph (ArrayBox)
+        z = pnp.clip(logits_or_expvals, -1.0, 1.0)
         p = (1.0 - z) * 0.5  # map <Z> in [-1,1] -> p in [0,1]
         y01 = (pnp.array(labels_pm1) + 1.0) * 0.5
         eps = 1e-8
@@ -132,7 +133,9 @@ class QuantumNativeTrainer:
                     model.quantum_params = model._unflatten_params(params)
                     if self.use_bce:
                         # Compute BCE on mapped probabilities
-                        preds = [model.quantum_predict_single(x) for x in X_quantum_batch]
+                        X_processed = model._preprocess_input(X_quantum_batch)
+                        preds = model.quantum_circuit(X_processed, params)
+                        preds = pnp.atleast_1d(preds)
                         loss = self._bce_loss(preds, y_quantum_batch)
                     else:
                         # Original MSE on expectation values vs {-1,1} labels
@@ -147,8 +150,8 @@ class QuantumNativeTrainer:
                 epoch_quantum_loss += batch_loss
                 n_quantum_batches += 1
 
-                quantum_outputs = [model.quantum_predict_single(x) for x in X_quantum_batch]
-                quantum_outputs = np.array(quantum_outputs)
+                X_processed = model._preprocess_input(X_quantum_batch)
+                quantum_outputs = pnp.atleast_1d(model.quantum_circuit(X_processed, params_flat))
                 
                 # Print diagnostic info (captured by Logger)
                 print(

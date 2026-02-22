@@ -12,54 +12,67 @@ class PureQuantumEncoder:
     @staticmethod
     def amplitude_encoding(data: np.ndarray, wires: list[int]) -> None:
         """
-        Pure quantum amplitude encoding.
-        Maps a classical vector into the amplitudes of an n-qubit
-        quantum state, padding or truncating as required. Normalizes
-        the state to satisfy ||ψ|| = 1 and embeds using PennyLane's
-        AmplitudeEmbedding.
+        Pure quantum amplitude encoding with batch support.
+        Maps classical vectors into the amplitudes of an n-qubit
+        quantum state, padding or truncating as required. 
         
         Args:
-            data: 1D numpy array of real values to embed
+            data: 1D array (features,) or 2D array (batch_size, features)
             wires: list of qubit indices for the embedding
         """
-        # Ensure data fits in quantum state space
+        data = np.asarray(data)
+        is_batched = data.ndim == 2
         max_size = 2 ** len(wires)
         
-        if len(data) > max_size:
-            data = data[:max_size]
-        elif len(data) < max_size:
-            # Pad with zeros
-            padded_data = np.zeros(max_size)
-            padded_data[:len(data)] = data
-            data = padded_data
+        # Determine current feature size
+        feat_size = data.shape[1] if is_batched else data.shape[0]
+        
+        if feat_size > max_size:
+            if is_batched:
+                data = data[:, :max_size]
+            else:
+                data = data[:max_size]
+        elif feat_size < max_size:
+            if is_batched:
+                padded = np.zeros((data.shape[0], max_size))
+                padded[:, :feat_size] = data
+                data = padded
+            else:
+                padded = np.zeros(max_size)
+                padded[:feat_size] = data
+                data = padded
         
         # Normalize for quantum amplitudes (must sum to 1)
-        data_norm = data / (np.linalg.norm(data) + 1e-10)
+        if is_batched:
+            norms = np.linalg.norm(data, axis=1, keepdims=True) + 1e-10
+            data_norm = data / norms
+        else:
+            data_norm = data / (np.linalg.norm(data) + 1e-10)
         
-        # Pure quantum encoding - no classical preprocessing
+        # Pure quantum encoding - natively supports batched input
         qml.AmplitudeEmbedding(features=data_norm, wires=wires, normalize=True)
     
     @staticmethod
     def quantum_feature_map(data: np.ndarray, wires: list[int]) -> None:
         """
         Rotation-based entangling quantum feature map.
-        Applies data-dependent RZ/RY rotations followed by sparse
-        entanglement patterns to embed nonlinear correlations that
-        classical preprocessing cannot easily represent.
-
-        Ensembles used:
-            - Local Hadamard and RZ rotations
-            - Linear-chain entanglement with correlation-based RZ gates
-            - Optional 2D grid entanglement for square layouts (e.g., 4×4)
+        Supports batched inputs.
         
         Args:
-            data: 1D numpy array of input values
+            data: 1D array (features,) or 2D array (batch_size, features)
             wires: list of qubit indices used for the feature map
         """
-        # Symmetric scheme: use one feature per wire, clip to [-1, 1],
-        # then map to bounded angles preserving sign information
-        L = min(len(data), len(wires))
-        x = np.asarray(data[:L], dtype=float)
+        data = np.asarray(data, dtype=float)
+        is_batched = data.ndim == 2
+        feat_size = data.shape[1] if is_batched else data.shape[0]
+        
+        L = min(feat_size, len(wires))
+        
+        if is_batched:
+            x = data[:, :L]
+        else:
+            x = data[:L]
+            
         if x.size > 0:
             x = np.clip(x, -1.0, 1.0)  # preserve sign, bound range
 
@@ -69,13 +82,16 @@ class PureQuantumEncoder:
         # Layer 1: Individual qubit rotations
         for i in range(L):
             qml.Hadamard(wires=wires[i])
-            qml.RZ(angles_z[i], wires=wires[i])
+            angle_z_i = angles_z[:, i] if is_batched else angles_z[i]
+            qml.RZ(angle_z_i, wires=wires[i])
 
-        # Layer 2: Quantum entangling interactions  
-        # Sparse local entanglement (linear chain) to keep depth manageable
+        # Layer 2: Quantum entangling interactions
         for i in range(L - 1):
             qml.CNOT(wires=[wires[i], wires[i + 1]])
-            corr_angle = (x[i] * x[i + 1]) * (np.pi / 4.0)
+            if is_batched:
+                corr_angle = (x[:, i] * x[:, i + 1]) * (np.pi / 4.0)
+            else:
+                corr_angle = (x[i] * x[i + 1]) * (np.pi / 4.0)
             qml.RZ(corr_angle, wires=wires[i + 1])
             qml.CNOT(wires=[wires[i], wires[i + 1]])
 
@@ -90,7 +106,10 @@ class PureQuantumEncoder:
                         b = r * width + (c + 1)
                         if a < L and b < L:
                             qml.CNOT(wires=[wires[a], wires[b]])
-                            qml.RZ((x[a] * x[b]) * (np.pi / 8.0), wires=wires[b])
+                            if is_batched:
+                                qml.RZ((x[:, a] * x[:, b]) * (np.pi / 8.0), wires=wires[b])
+                            else:
+                                qml.RZ((x[a] * x[b]) * (np.pi / 8.0), wires=wires[b])
                             qml.CNOT(wires=[wires[a], wires[b]])
                 # Vertical neighbors
                 for c in range(width):
@@ -99,9 +118,13 @@ class PureQuantumEncoder:
                         b = (r + 1) * width + c
                         if a < L and b < L:
                             qml.CNOT(wires=[wires[a], wires[b]])
-                            qml.RZ((x[a] * x[b]) * (np.pi / 8.0), wires=wires[b])
+                            if is_batched:
+                                qml.RZ((x[:, a] * x[:, b]) * (np.pi / 8.0), wires=wires[b])
+                            else:
+                                qml.RZ((x[a] * x[b]) * (np.pi / 8.0), wires=wires[b])
                             qml.CNOT(wires=[wires[a], wires[b]])
 
         # Layer 3: Second-order rotations
         for i in range(L):
-            qml.RY(angles_y[i], wires=wires[i])
+            angle_y_i = angles_y[:, i] if is_batched else angles_y[i]
+            qml.RY(angle_y_i, wires=wires[i])

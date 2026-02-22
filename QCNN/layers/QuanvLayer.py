@@ -146,7 +146,7 @@ class QuanvolutionalLayer:
 
     def process_batch(self, X: np.ndarray, image_size: int = None) -> np.ndarray:
         """
-        Apply quanvolutional preprocessing to a batch of images.
+        Apply quanvolutional preprocessing to a batch of images using multithreading.
 
         Args:
             X: Batch of images, shape (n_samples, features) or (n_samples, h, w)
@@ -155,15 +155,26 @@ class QuanvolutionalLayer:
         Returns:
             Reduced feature array (n_samples, reduced_features)
         """
-        results = []
-        for i, x in enumerate(X):
+        import concurrent.futures
+
+        def process_single(args):
+            i, x = args
             if x.ndim == 1 and image_size is not None:
                 x = x.reshape(image_size, image_size)
-            features = self.process_image(x)
-            results.append(features)
+            return i, self.process_image(x)
 
-            if (i + 1) % 50 == 0:
-                print(f"  Quanv preprocessing: {i + 1}/{len(X)} samples")
+        results = [None] * len(X)
+        
+        # lightning.qubit operates in C++ and releases the GIL, making ThreadPool scalable
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_single, (i, x)) for i, x in enumerate(X)]
+            
+            for completed_count, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                i, features = future.result()
+                results[i] = features
+                
+                if completed_count % 50 == 0 or completed_count == len(X):
+                    print(f"  Quanv preprocessing: {completed_count}/{len(X)} samples")
 
         return np.array(results)
 

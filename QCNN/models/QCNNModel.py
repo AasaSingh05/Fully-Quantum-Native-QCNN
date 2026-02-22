@@ -74,8 +74,8 @@ class PureQuantumNativeCNN:
 
         # Convolutional layer: SHARED 2x2 kernel per layer.
         # Each kernel acts on 4 qubits with shape (4, depth, 2) => [RY, RZ] angles per depth.
-        # Keep depth small for stability.
-        conv_depth = 1
+        # depth=2 improves expressivity and accuracy significantly.
+        conv_depth = 2
         kernel_shape = (4, conv_depth, 2)
         for layer in range(self.config.n_conv_layers):
             kernel_tensor = pnp.array(np.random.normal(0, 0.1, kernel_shape), requires_grad=True)
@@ -118,7 +118,7 @@ class PureQuantumNativeCNN:
         idx = 0
 
         # Convs: each layer kernel is (4, depth, 2)
-        conv_depth = 1
+        conv_depth = 2
         kernel_size = 4 * conv_depth * 2
         for layer in range(self.config.n_conv_layers):
             size = kernel_size
@@ -233,29 +233,35 @@ class PureQuantumNativeCNN:
 
     def _preprocess_input(self, x: np.ndarray) -> np.ndarray:
         """
-        Apply encoding-specific preprocessing to a single input sample.
-
-        For 'patch' encoding: apply quanvolutional layer to extract features.
-        For 'amplitude': pad to nearest power of 2 if needed.
-        For 'feature_map': pass through as-is.
-
+        Apply encoding-specific preprocessing to a single or batch input sample.
+        
         Args:
-            x: raw input sample
-
+            x: raw input sample or batch of samples
+            
         Returns:
-            Preprocessed sample ready for the quantum circuit.
+            Preprocessed sample(s) ready for the quantum circuit.
         """
         if self.config.encoding_type == 'patch' and self.quanv_layer is not None:
             # Apply quanvolutional preprocessing
+            if x.ndim == 2 and x.shape[0] != x.shape[1]:
+                return self.quanv_layer.process_batch(x)
             return self.quanv_layer.process_image(x)
         elif self.config.encoding_type == 'amplitude':
             # Ensure length is power of 2 for amplitude encoding
             target_len = 2 ** self.num_qubits
-            if len(x) < target_len:
-                padded = np.zeros(target_len)
-                padded[:len(x)] = x
-                return padded
-            return x[:target_len]
+            is_batched = x.ndim == 2
+            feat_len = x.shape[1] if is_batched else len(x)
+            
+            if feat_len < target_len:
+                if is_batched:
+                    padded = np.zeros((x.shape[0], target_len))
+                    padded[:, :feat_len] = x
+                    return padded
+                else:
+                    padded = np.zeros(target_len)
+                    padded[:feat_len] = x
+                    return padded
+            return x[:, :target_len] if is_batched else x[:target_len]
         else:
             return x
 
@@ -276,6 +282,7 @@ class PureQuantumNativeCNN:
     def quantum_predict_batch(self, X: np.ndarray) -> np.ndarray:
         """
         Batch quantum prediction with {-1,1} output encoding.
+        Vectorized to directly leverage PennyLane's parameter broadcasting.
 
         Args:
             X: array of samples
@@ -283,17 +290,20 @@ class PureQuantumNativeCNN:
         Returns:
             numpy array of binary predictions.
         """
-        predictions = []
-        for x in X:
-            quantum_output = self.quantum_predict_single(x)
-            binary_pred = 1 if quantum_output > 0 else -1
-            predictions.append(binary_pred)
-        return np.array(predictions)
+        X_processed = self._preprocess_input(X)
+        flat_params = self._flatten_params(self.quantum_params)
+        
+        quantum_outputs = self.quantum_circuit(X_processed, flat_params)
+        # Ensure it's an iterable array if single element prediction
+        quantum_outputs = pnp.atleast_1d(quantum_outputs)
+        
+        predictions = np.where(quantum_outputs > 0, 1, -1)
+        return predictions
 
     def quantum_loss_function(self, X_batch: np.ndarray, y_batch: np.ndarray) -> float:
         """
         Computes pure quantum MSE loss + small L2 penalty.
-        Evaluated entirely from quantum predictions.
+        Evaluated entirely from batched quantum predictions.
 
         Args:
             X_batch: minibatch of samples
@@ -302,12 +312,11 @@ class PureQuantumNativeCNN:
         Returns:
             scalar loss value
         """
-        quantum_predictions = []
-        for x in X_batch:
-            quantum_output = self.quantum_predict_single(x)
-            quantum_predictions.append(quantum_output)
-
-        quantum_predictions = pnp.array(quantum_predictions)
+        X_processed = self._preprocess_input(X_batch)
+        flat_params = self._flatten_params(self.quantum_params)
+        
+        quantum_predictions = self.quantum_circuit(X_processed, flat_params)
+        quantum_predictions = pnp.atleast_1d(quantum_predictions)
         y_batch = pnp.array(y_batch)
 
         quantum_loss = pnp.mean((quantum_predictions - y_batch) ** 2)
