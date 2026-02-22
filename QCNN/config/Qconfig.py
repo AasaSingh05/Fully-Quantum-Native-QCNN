@@ -64,11 +64,13 @@ class QuantumNativeConfig:
             # 1 qubit per pixel
             self.n_qubits = self.n_features
             if self.n_qubits > 25:
-                raise ValueError(
-                    f"Cannot simulate {self.n_qubits} qubits via 'feature_map' encoding. "
-                    "Classical simulation is bounded to ~25 qubits. "
-                    "Use 'amplitude' or 'patch' encoding, or downsample the image."
-                )
+                # Automatically downsample if possible
+                target_size = 5  # 5x5 = 25 features limit
+                print(f"Warning: Cannot simulate {self.n_features} qubits via 'feature_map' encoding.")
+                print(f"Auto-downsampling target resolution to {target_size}x{target_size} (25 qubits max).")
+                self.image_size = target_size
+                self.n_features = target_size ** 2
+                self.n_qubits = self.n_features
         
         elif encoding == 'amplitude':
             # log₂(features) qubits – pad features to nearest power of 2
