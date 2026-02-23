@@ -144,9 +144,67 @@ class QuanvolutionalLayer:
 
         return feature_map.flatten()
 
+    def _build_thread_local_filter(self):
+        """
+        Create a thread-local QNode + device pair.
+        PennyLane QNodes are NOT thread-safe (they share internal measurement
+        state), so each worker thread must have its own device and QNode.
+        """
+        dev = qml.device(self.device_name, wires=self.n_qubits)
+        n_qubits = self.n_qubits
+
+        @qml.qnode(dev, interface='autograd')
+        def _quantum_filter(patch_data, filter_params):
+            for i in range(n_qubits):
+                if i < len(patch_data):
+                    qml.RY(patch_data[i], wires=i)
+            for i in range(n_qubits):
+                qml.RY(filter_params[i, 0], wires=i)
+                qml.RZ(filter_params[i, 1], wires=i)
+            for i in range(n_qubits - 1):
+                qml.CNOT(wires=[i, i + 1])
+            for i in range(n_qubits):
+                qml.RY(filter_params[i, 2], wires=i)
+            return qml.expval(qml.PauliZ(0))
+
+        return _quantum_filter
+
+    def _process_image_with_filter(self, image: np.ndarray, qfilter) -> np.ndarray:
+        """Process a single image using a given (thread-local) quantum filter."""
+        if image.ndim == 1:
+            side = int(np.sqrt(len(image)))
+            if side * side != len(image):
+                side = int(np.ceil(np.sqrt(len(image))))
+                padded = np.zeros(side * side)
+                padded[:len(image)] = image
+                image = padded
+            image = image.reshape(side, side)
+
+        h, w = image.shape
+        img_min, img_max = image.min(), image.max()
+        if img_max - img_min > 1e-10:
+            image = (image - img_min) / (img_max - img_min) * 2 * np.pi
+
+        patches = self.extract_patches(image)
+        out_h = (h - self.patch_size) // self.stride + 1
+        out_w = (w - self.patch_size) // self.stride + 1
+        feature_map = np.zeros((out_h, out_w, self.n_filters))
+
+        for patch_data, r, c in patches:
+            r_idx = r // self.stride
+            c_idx = c // self.stride
+            for f_idx, f_params in enumerate(self.filter_params):
+                result = qfilter(patch_data, f_params)
+                feature_map[r_idx, c_idx, f_idx] = float(result)
+
+        return feature_map.flatten()
+
     def process_batch(self, X: np.ndarray, image_size: int = None) -> np.ndarray:
         """
         Apply quanvolutional preprocessing to a batch of images using multithreading.
+
+        Each worker thread gets its own PennyLane device + QNode to avoid
+        measurement-ordering conflicts on the shared internal state.
 
         Args:
             X: Batch of images, shape (n_samples, features) or (n_samples, h, w)
@@ -156,23 +214,30 @@ class QuanvolutionalLayer:
             Reduced feature array (n_samples, reduced_features)
         """
         import concurrent.futures
+        import threading
+
+        # Thread-local storage so each thread builds its QNode exactly once
+        _tls = threading.local()
 
         def process_single(args):
             i, x = args
             if x.ndim == 1 and image_size is not None:
                 x = x.reshape(image_size, image_size)
-            return i, self.process_image(x)
+            # Lazily create a thread-local quantum filter
+            if not hasattr(_tls, 'qfilter'):
+                _tls.qfilter = self._build_thread_local_filter()
+            return i, self._process_image_with_filter(x, _tls.qfilter)
 
         results = [None] * len(X)
-        
+
         # lightning.qubit operates in C++ and releases the GIL, making ThreadPool scalable
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(process_single, (i, x)) for i, x in enumerate(X)]
-            
+
             for completed_count, future in enumerate(concurrent.futures.as_completed(futures), 1):
                 i, features = future.result()
                 results[i] = features
-                
+
                 if completed_count % 50 == 0 or completed_count == len(X):
                     print(f"  Quanv preprocessing: {completed_count}/{len(X)} samples")
 
