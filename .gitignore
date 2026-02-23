@@ -16,6 +16,7 @@ QCNN/*/__pycache__
 # Results/
 training_log.txt
 training_summary.txt
+Results/Cache/
 
 
 # output.txt
