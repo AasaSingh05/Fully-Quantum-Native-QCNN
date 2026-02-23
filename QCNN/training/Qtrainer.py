@@ -23,9 +23,10 @@ class QuantumNativeTrainer:
             use_bce: whether to use BCE on mapped probabilities instead of MSE
         """
         self.learning_rate = learning_rate
-        self.use_bce = use_bce  # optional BCE on mapped probability
-        # Use quantum-aware optimizer
-        self.quantum_optimizer = qml.AdamOptimizer(stepsize=learning_rate)
+        self.use_bce = use_bce
+        # Auto-adjust learning rate for BCE (steeper gradients need smaller steps)
+        effective_lr = learning_rate if not use_bce else min(learning_rate, 0.002)
+        self.quantum_optimizer = qml.AdamOptimizer(stepsize=effective_lr)
     
     def save_params(self, params: dict, filepath: str):
         """
@@ -65,7 +66,9 @@ class QuantumNativeTrainer:
         """
         # Do not wrap logits_or_expvals in pnp.array() as it breaks the computational graph (ArrayBox)
         z = pnp.clip(logits_or_expvals, -1.0, 1.0)
-        p = (1.0 - z) * 0.5  # map <Z> in [-1,1] -> p in [0,1]
+        # Map ⟨Z⟩ in [-1,1] → p in [0,1]: +1 → p=1 (class 1), -1 → p=0 (class 0)
+        # This is consistent with prediction threshold: ⟨Z⟩ > 0 → class +1
+        p = (1.0 + z) * 0.5
         y01 = (pnp.array(labels_pm1) + 1.0) * 0.5
         eps = 1e-8
         return -pnp.mean(y01 * pnp.log(p + eps) + (1.0 - y01) * pnp.log(1.0 - p + eps))
@@ -195,7 +198,7 @@ class QuantumNativeTrainer:
             model.quantum_params = model._unflatten_params(params_flat)
             
             # Compute accuracies; limit train accuracy sample size for speed
-            train_accuracy = self._compute_quantum_accuracy(model, X_train[:50], y_train[:50])
+            train_accuracy = self._compute_quantum_accuracy(model, X_train[:200], y_train[:200])
             test_accuracy = self._compute_quantum_accuracy(model, X_test, y_test)
             
             model.training_history['loss'].append(float(avg_loss))
