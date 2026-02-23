@@ -12,9 +12,9 @@
         "patch_stride": 4,
         "n_quanv_filters": 4,
         "quanv_qubits": 16,
-        "learning_rate": 0.005,
+        "learning_rate": 0.01,
         "n_epochs": 100,
-        "batch_size": 64,
+        "batch_size": 32,
         "device": "lightning.qubit",
         "shots": null
     },

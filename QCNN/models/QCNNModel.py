@@ -78,17 +78,17 @@ class PureQuantumNativeCNN:
         conv_depth = 2
         kernel_shape = (4, conv_depth, 2)
         for layer in range(self.config.n_conv_layers):
-            kernel_tensor = pnp.array(np.random.normal(0, 0.1, kernel_shape), requires_grad=True)
+            kernel_tensor = pnp.array(np.random.normal(0, 0.3, kernel_shape), requires_grad=True)
             params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
 
         # Pooling layer parameters:
         # We consume 3 angles per (keep, discard) pair in QuantumNativePooling.quantum_unitary_pooling.
         max_pairs = self.num_qubits // 2
         pool_angles = 3 * max_pairs
-        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.1, pool_angles), requires_grad=True)
+        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.3, pool_angles), requires_grad=True)
 
         # Fully connected classifier layer (on up to last 2 active qubits)
-        params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.1, 8), requires_grad=True)
+        params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.3, 8), requires_grad=True)
 
         return params
 
@@ -302,7 +302,7 @@ class PureQuantumNativeCNN:
 
     def quantum_loss_function(self, X_batch: np.ndarray, y_batch: np.ndarray) -> float:
         """
-        Computes pure quantum MSE loss + small L2 penalty.
+        Computes pure quantum MSE loss.
         Evaluated entirely from batched quantum predictions.
 
         Args:
@@ -321,9 +321,4 @@ class PureQuantumNativeCNN:
 
         quantum_loss = pnp.mean((quantum_predictions - y_batch) ** 2)
 
-        quantum_penalty = 0
-        for param_set in self.quantum_params.values():
-            quantum_penalty += pnp.sum(param_set ** 2)
-
-        return quantum_loss + 0.001 * quantum_penalty
-        # return quantum_loss
+        return quantum_loss
