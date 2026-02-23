@@ -74,6 +74,7 @@ class QuantumNativeTrainer:
                                X_train: np.ndarray, y_train: np.ndarray,
                                X_test: np.ndarray, y_test: np.ndarray,
                                log_filepath='quantum_training_log.txt',
+                               summary_filepath='training_summary.txt',
                                validate_data: bool = True) -> PureQuantumNativeCNN:
         """
         Train QCNN model end-to-end using parameter-shift-compatible optimization.
@@ -178,26 +179,24 @@ class QuantumNativeTrainer:
             elapsed = time.time() - epoch_start
             estimated_total = elapsed / ((epoch + 1) / n_epochs)
             remaining = estimated_total - elapsed
-            
-            print(
-                f"\n--- Epoch {epoch+1}/{n_epochs} Summary ---"
+            epoch_summary_text = (
+                f"\n--- Epoch {epoch+1}/{n_epochs} Summary ---\n"
+                f"  Loss: {avg_loss:.4f}\n"
+                f"  Train Accuracy: {train_accuracy:.1%}\n"
+                f"  Test Accuracy: {test_accuracy:.1%}\n"
+                f"  Progress: {progress_percent:.1f}%\n"
+                f"  ETA: {remaining:.1f}s\n"
+                f"{'-' * 30}"
             )
-            print(
-                f"  Loss: {avg_loss:.4f}"
-            )
-            print(
-                f"  Train Accuracy: {train_accuracy:.1%}"
-            )
-            print(
-                f"  Test Accuracy: {test_accuracy:.1%}"
-            )
-            print(
-                f"  Progress: {progress_percent:.1f}%"
-            )
-            print(
-                f"  ETA: {remaining:.1f}s"
-            )
-            print("-" * 30)
+            print(epoch_summary_text)
+
+            # Write out to summary log
+            if summary_filepath:
+                try:
+                    with open(summary_filepath, 'a', encoding='utf-8') as sf:
+                        sf.write(epoch_summary_text + "\n")
+                except Exception as e:
+                    print(f"Warning: could not write summary to {summary_filepath}: {e}")
         
         # Restore best quantum parameters
         model.quantum_params = best_quantum_params

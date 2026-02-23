@@ -57,7 +57,7 @@ print("Starting main execution script...")  # Debug to monitor re-imports
 
 
 def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
-         encoding='auto', image_size=None, log_file="training_log.txt"):
+         encoding='auto', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt"):
     """Main execution function
     
     Args:
@@ -68,6 +68,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         encoding (str): Encoding type ('auto', 'feature_map', 'amplitude', 'patch')
         image_size (int or None): Width/height of square image
         log_file (str): Path to output log file
+        summary_log_file (str): Path to summary output log file
     """
     # Initialize logger to capture all output to file
     sys.stdout = Logger(log_file)
@@ -173,7 +174,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     print("\n Step 4: Training Pure Quantum CNN...")
     trainer = QuantumNativeTrainer(learning_rate=config.learning_rate, use_bce=use_bce)
     trained_model = trainer.train_pure_quantum_cnn(
-        quantum_model, X_train, y_train, X_test, y_test
+        quantum_model, X_train, y_train, X_test, y_test, log_filepath=log_file, summary_filepath=summary_log_file
     )
 
     # Step 5: Evaluation
@@ -250,6 +251,8 @@ if __name__ == "__main__":
                        help='Two classes to use for binary classification (default: 0 1)')
     parser.add_argument('--log-file', type=str, default='training_log.txt',
                        help='File to save training logs (default: training_log.txt)')
+    parser.add_argument('--summary-log', type=str, default='training_summary.txt',
+                       help='File to save epoch summaries (default: training_summary.txt)')
     parser.add_argument('--no-profile', action='store_true',
                        help='Disable cProfile performance profiling')
     
@@ -268,7 +271,8 @@ if __name__ == "__main__":
             dataset_type=args.dataset,
             encoding=args.encoding,
             image_size=args.image_size,
-            log_file=args.log_file
+            log_file=args.log_file,
+            summary_log_file=args.summary_log
         )
         
         if not args.no_profile:

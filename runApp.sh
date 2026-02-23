@@ -9,6 +9,7 @@ if [[ "$1" == --* ]]; then
         --encoding "auto" \
         --image-size "28" \
         --classes "0" "1" \
+        --summary-log "training_summary.txt" \
         --no-profile \
         "$@"
     exit $?
@@ -48,5 +49,6 @@ echo "------------------------------------------------"
     --encoding "$ENCODING" \
     --image-size "$IMAGE_SIZE" \
     --classes "$CLASS_A" "$CLASS_B" \
+    --summary-log "training_summary.txt" \
     --no-profile \
     "${@:7}"

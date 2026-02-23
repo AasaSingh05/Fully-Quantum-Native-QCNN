@@ -8,13 +8,14 @@ QCNN/*/__pycache__
 *.pyc
 
 #for testing and checking modules and snippets
-implementationTests/
-implementationTests/*
+# implementationTests/
+# implementationTests/*
 
 #Results
 # Results/*
 # Results/
 training_log.txt
+training_summary.txt
 
 
 # output.txt
