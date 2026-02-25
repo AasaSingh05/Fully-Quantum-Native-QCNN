@@ -247,6 +247,10 @@ class PureQuantumNativeCNN:
                 return self.quanv_layer.process_batch(x)
             return self.quanv_layer.process_image(x)
         elif self.config.encoding_type == 'amplitude':
+            # Ensure input is at most 2D: (features,) or (batch_size, features)
+            if x.ndim > 2:
+                x = x.reshape(x.shape[0], -1)
+            
             # Ensure length is power of 2 for amplitude encoding
             target_len = 2 ** self.num_qubits
             is_batched = x.ndim == 2
