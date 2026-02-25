@@ -179,8 +179,26 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
 
     # Step 5: Evaluation
     print("\n Step 5: Evaluating Quantum Model...")
-    predictions = trained_model.quantum_predict_batch(X_test)
-    accuracy = np.mean(predictions == y_test)
+
+    # Use the exact test representation that was used during training, if available.
+    X_eval = X_test
+    y_eval = y_test
+    if hasattr(trained_model, "_quantum_preprocessed_test"):
+        try:
+            cached_X, cached_y = trained_model._quantum_preprocessed_test, y_test
+            # In case future extensions also cache labels, handle tuple form.
+            if isinstance(trained_model._quantum_preprocessed_test, tuple):
+                cached_X, cached_y = trained_model._quantum_preprocessed_test
+            if len(cached_X) == len(y_test):
+                X_eval = cached_X
+                y_eval = cached_y
+        except Exception:
+            # Fallback gracefully to original test set on any mismatch
+            X_eval = X_test
+            y_eval = y_test
+
+    predictions = trained_model.quantum_predict_batch(X_eval)
+    accuracy = np.mean(predictions == y_eval)
     print(f" Final Quantum Accuracy: {accuracy:.1%}")
 
     # Confusion matrix

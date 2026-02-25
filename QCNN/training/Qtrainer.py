@@ -134,10 +134,16 @@ class QuantumNativeTrainer:
                 np.savez(cache_path, X_train=X_train, X_test=X_test)
                 print(f"  Pre-calculation complete. Reduced shape: {X_train.shape[1:]}")
                 print(f"  Cached to '{cache_path}' for future runs.")
-
+            
             # Switch internal encoding to 'amplitude' for the QNode since data is now reduced
             model.config.encoding_type = 'amplitude'
-
+        
+        # Cache the (potentially preprocessed) datasets on the model so that
+        # downstream evaluation can reuse the exact same representation that
+        # was used during training and internal accuracy computation.
+        model._quantum_preprocessed_train = X_train
+        model._quantum_preprocessed_test = X_test
+        
         print("Starting Training")
         print("="*50)
 
