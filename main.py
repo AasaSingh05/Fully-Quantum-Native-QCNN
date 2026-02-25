@@ -137,8 +137,14 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
             y_quantum = y_quantum[indices]
     
     print("Dataset ready.")
-    # Auto-downsample if resolution is too high (> 16x16)
-    if X_quantum.ndim == 3 and X_quantum.shape[1] > 16:
+    # Auto-downsample only when not using amplitude encoding,
+    # where we want to preserve as much image information as
+    # possible for the quantum state.
+    if (
+        X_quantum.ndim == 3
+        and X_quantum.shape[1] > 16
+        and config.encoding_type != 'amplitude'
+    ):
         print(f"  Detected high resolution ({X_quantum.shape[1:]}). Downsampling for quantum efficiency...")
         # Simple 2x2 mean pooling downsampling
         h, w = X_quantum.shape[1], X_quantum.shape[2]

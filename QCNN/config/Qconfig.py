@@ -32,7 +32,7 @@ class QuantumNativeConfig:
         
         # Quantum training parameters
         self.learning_rate = 0.01
-        self.n_epochs = 100
+        self.n_epochs = 20
         self.batch_size = 32
         
         # Quantum device
