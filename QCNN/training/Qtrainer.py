@@ -14,7 +14,7 @@ class QuantumNativeTrainer:
     and training diagnostics logged to file.
     """
 
-    def __init__(self, learning_rate: float = 0.005, use_bce: bool = False):
+    def __init__(self, learning_rate: float = 0.002, use_bce: bool = True):
         """
         Initialize trainer with learning rate, loss mode, and optimizer.
 
@@ -24,9 +24,8 @@ class QuantumNativeTrainer:
         """
         self.learning_rate = learning_rate
         self.use_bce = use_bce
-        # Auto-adjust learning rate for BCE (steeper gradients need smaller steps)
-        effective_lr = learning_rate if not use_bce else min(learning_rate, 0.002)
-        self.quantum_optimizer = qml.AdamOptimizer(stepsize=effective_lr)
+        # For quantum classification, 0.01 is generally a good start for BCE/MSE
+        self.quantum_optimizer = qml.AdamOptimizer(stepsize=learning_rate)
     
     def save_params(self, params: dict, filepath: str):
         """
@@ -70,7 +69,7 @@ class QuantumNativeTrainer:
         # This is consistent with prediction threshold: ⟨Z⟩ > 0 → class +1
         p = (1.0 + z) * 0.5
         y01 = (pnp.array(labels_pm1) + 1.0) * 0.5
-        eps = 1e-8
+        eps = 1e-7
         return -pnp.mean(y01 * pnp.log(p + eps) + (1.0 - y01) * pnp.log(1.0 - p + eps))
 
     def train_pure_quantum_cnn(self, model: PureQuantumNativeCNN, 
@@ -99,6 +98,7 @@ class QuantumNativeTrainer:
             self._validate_dataset(X_train, y_train, model)
             self._validate_dataset(X_test, y_test, model)
         
+        print(f"DEBUG: Qtrainer enters train_pure_quantum_cnn. Encoding: {model.config.encoding_type}")
         if model.config.encoding_type == 'patch' and model.quanv_layer is not None:
             import hashlib
 
@@ -172,25 +172,32 @@ class QuantumNativeTrainer:
                 def quantum_cost(params):
                     model.quantum_params = model._unflatten_params(params)
                     if self.use_bce:
-                        # Compute BCE on mapped probabilities
                         X_processed = model._preprocess_input(X_quantum_batch)
                         preds = model.quantum_circuit(X_processed, params)
                         preds = pnp.atleast_1d(preds)
                         loss = self._bce_loss(preds, y_quantum_batch)
                     else:
-                        # Original MSE on expectation values vs {-1,1} labels
                         loss = model.quantum_loss_function(X_quantum_batch, y_quantum_batch)
                     return loss
                 
-                param_norm_before = pnp.linalg.norm(params_flat)
-                params_flat = self.quantum_optimizer.step(quantum_cost, params_flat)
-                param_norm_after = pnp.linalg.norm(params_flat)
-
-                batch_loss = quantum_cost(params_flat)
-                epoch_quantum_loss += batch_loss
+                # Manually compute gradients for clipping support
+                grad, loss_val = self.quantum_optimizer.compute_grad(quantum_cost, (params_flat,), {})
+                
+                # Gradient clipping to prevent NaNs
+                grad_norm = pnp.linalg.norm(grad[0])
+                if grad_norm > 1.0:
+                    grad = (grad[0] * (1.0 / grad_norm),)
+                
+                params_flat = self.quantum_optimizer.apply_grad(grad, (params_flat,))[0]
+                
+                # Safe logging of real values
+                print(f"  Batch loss: {float(loss_val):.6f}")
+                
+                epoch_quantum_loss += float(loss_val)
                 n_quantum_batches += 1
 
                 X_processed = model._preprocess_input(X_quantum_batch)
+                
                 quantum_outputs = pnp.atleast_1d(model.quantum_circuit(X_processed, params_flat))
                 
                 # Print diagnostic info (captured by Logger)

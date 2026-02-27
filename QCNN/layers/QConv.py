@@ -1,5 +1,5 @@
-import numpy as np
 import pennylane as qml
+import pennylane.numpy as pnp
 
 
 class QuantumNativeConvolution:
@@ -26,7 +26,7 @@ class QuantumNativeConvolution:
             raise ValueError("Convolution window must be exactly 4 qubits (2x2) for this kernel.")
 
         # Accept autograd types; avoid forcing dtype=float here
-        params_arr = np.asarray(params)
+        params_arr = pnp.asarray(params)
 
         # Backward-compat handling and shape normalization:
         # Normalize input to shape (4, depth, 2) with last dim [RY, RZ]

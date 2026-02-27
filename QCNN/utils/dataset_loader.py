@@ -188,7 +188,7 @@ def load_mnist_subset(n_samples: int = 1000,
         raise ImportError("scikit-learn required for MNIST. Install with: pip install scikit-learn")
     
     print(f"Loading MNIST subset (classes {classes[0]} and {classes[1]})...")
-    mnist = fetch_openml('mnist_784', version=1, parser='auto')
+    mnist = fetch_openml('mnist_784', version=1, parser='liac-arff', as_frame=False)
     X, y = mnist.data, mnist.target.astype(int)
     
     # Filter for binary classification

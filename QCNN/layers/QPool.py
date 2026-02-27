@@ -1,5 +1,5 @@
-import numpy as np
 import pennylane as qml
+import pennylane.numpy as pnp
 
 
 class QuantumNativePooling:
@@ -49,7 +49,7 @@ class QuantumNativePooling:
             output_qubits: list of qubits to discard after pooling
         """
         # Flatten while preserving autograd types (avoid dtype=float casts)
-        angles = np.asarray(params).reshape(-1)
+        angles = pnp.asarray(params).reshape(-1)
         if angles.size == 0:
             return
 

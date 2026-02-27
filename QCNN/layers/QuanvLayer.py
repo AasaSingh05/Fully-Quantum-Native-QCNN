@@ -201,10 +201,8 @@ class QuanvolutionalLayer:
 
     def process_batch(self, X: np.ndarray, image_size: int = None) -> np.ndarray:
         """
-        Apply quanvolutional preprocessing to a batch of images using multithreading.
-
-        Each worker thread gets its own PennyLane device + QNode to avoid
-        measurement-ordering conflicts on the shared internal state.
+        Apply quanvolutional preprocessing to a batch of images.
+        Sequential execution for maximum stability with PennyLane contexts.
 
         Args:
             X: Batch of images, shape (n_samples, features) or (n_samples, h, w)
@@ -213,33 +211,19 @@ class QuanvolutionalLayer:
         Returns:
             Reduced feature array (n_samples, reduced_features)
         """
-        import concurrent.futures
-        import threading
-
-        # Thread-local storage so each thread builds its QNode exactly once
-        _tls = threading.local()
-
-        def process_single(args):
-            i, x = args
+        results = []
+        total = len(X)
+        
+        print(f"  Starting Quanv batch processing ({total} samples)...")
+        for i, x in enumerate(X):
             if x.ndim == 1 and image_size is not None:
                 x = x.reshape(image_size, image_size)
-            # Lazily create a thread-local quantum filter
-            if not hasattr(_tls, 'qfilter'):
-                _tls.qfilter = self._build_thread_local_filter()
-            return i, self._process_image_with_filter(x, _tls.qfilter)
-
-        results = [None] * len(X)
-
-        # lightning.qubit operates in C++ and releases the GIL, making ThreadPool scalable
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_single, (i, x)) for i, x in enumerate(X)]
-
-            for completed_count, future in enumerate(concurrent.futures.as_completed(futures), 1):
-                i, features = future.result()
-                results[i] = features
-
-                if completed_count % 50 == 0 or completed_count == len(X):
-                    print(f"  Quanv preprocessing: {completed_count}/{len(X)} samples")
+            
+            features = self.process_image(x)
+            results.append(features)
+            
+            if (i + 1) % 50 == 0 or (i + 1) == total:
+                print(f"  Quanv preprocessing: {i + 1}/{total} samples")
 
         return np.array(results)
 

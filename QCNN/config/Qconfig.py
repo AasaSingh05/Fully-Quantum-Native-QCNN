@@ -18,7 +18,7 @@ class QuantumNativeConfig:
         #   feature_map  – 1 qubit per feature (original, image_size² qubits)
         #   amplitude    – log₂(features) qubits via amplitude embedding
         #   patch        – quanvolutional preprocessing then QCNN on reduced map
-        self.encoding_type = 'feature_map'
+        self.encoding_type = 'feature_map'  # More stable default than amplitude
         
         # Pure quantum architecture parameters  
         self.n_conv_layers = 4
@@ -32,8 +32,8 @@ class QuantumNativeConfig:
         
         # Quantum training parameters
         self.learning_rate = 0.005
-        self.n_epochs = 50
-        self.batch_size = 32
+        self.n_epochs = 100
+        self.batch_size = 16
         
         # Quantum device
         self.device = 'lightning.qubit'  
@@ -77,6 +77,7 @@ class QuantumNativeConfig:
             n_features_padded = 2 ** math.ceil(math.log2(max(self.n_features, 2)))
             self.n_qubits = math.ceil(math.log2(n_features_padded))
             self.n_features = n_features_padded
+            # Do NOT overwrite image_size; it's needed for initial data loading/preprocessing
         
         elif encoding == 'patch':
             # Quanvolutional: QCNN operates on the reduced feature map
@@ -87,6 +88,7 @@ class QuantumNativeConfig:
             n_padded = 2 ** math.ceil(math.log2(max(reduced_features, 2)))
             self.n_qubits = math.ceil(math.log2(n_padded))
             self.n_features = reduced_features
+            # Do NOT overwrite image_size; it's needed for initial data loading/preprocessing
         
         # Adjust conv layers based on qubit count
         if self.n_qubits < 8:

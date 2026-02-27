@@ -39,15 +39,15 @@ class PureQuantumNativeCNN:
                 patch_size=config.patch_size,
                 n_filters=config.n_quanv_filters,
                 stride=config.patch_stride,
-                device_name='lightning.qubit',  # Faster device
+                device_name='default.qubit',  # Safer device for backprop
                 random_params=True
             )
 
         # Initialize pure quantum parameters
         self.quantum_params = self._initialize_quantum_parameters()
 
-        # Create pure quantum circuit with high-performance adjoint differentiation
-        @qml.qnode(self.device, interface='autograd', diff_method='adjoint')
+        # Create pure quantum circuit with high-performance differentiation
+        @qml.qnode(self.device, interface='autograd', diff_method='best')
         def quantum_circuit(x, flat_params):
             # Unflatten parameters from flat vector
             params = self._unflatten_params(flat_params)
@@ -174,16 +174,19 @@ class PureQuantumNativeCNN:
 
         for layer in range(self.config.n_conv_layers):
             # Apply quantum convolution to all windows on the CURRENT active layout
-            if current_image_size >= 2 and len(active_qubits) >= 4:
-                base_windows = QuantumNativeConvolution.get_conv_windows(current_image_size)  # relative windows
+            n_current = len(active_qubits)
+            if n_current >= 4:
+                # Calculate logical square root for the grid
+                # If non-square (e.g. 8), sqrt(8)~2.8 -> size=2 -> 1 window
+                current_grid_dim = int(math.sqrt(n_current))
+                base_windows = QuantumNativeConvolution.get_conv_windows(current_grid_dim)  # relative windows
                 kernel = params[f'quantum_conv_kernel_{layer}']  # shared weights: (4, depth, 2)
 
                 for rel_window in base_windows:
-                    # Skip any window beyond current active wires
-                    if max(rel_window) >= len(active_qubits):
-                        continue
-                    window_qubits = [active_qubits[i] for i in rel_window]
-                    QuantumNativeConvolution.quantum_conv2d_kernel(kernel, window_qubits)
+                    # Map relative window indices to actual active qubits
+                    if max(rel_window) < n_current:
+                        window_qubits = [active_qubits[i] for i in rel_window]
+                        QuantumNativeConvolution.quantum_conv2d_kernel(kernel, window_qubits)
 
             # Quantum pooling between layers (except last)
             if layer < self.config.n_conv_layers - 1:

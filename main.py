@@ -57,7 +57,7 @@ print("Starting main execution script...")  # Debug to monitor re-imports
 
 
 def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type='synthetic', 
-         encoding='auto', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt"):
+         encoding='feature_map', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt"):
     """Main execution function
     
     Args:
@@ -128,6 +128,18 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
             encoding_type=config.encoding_type,
             classes=tuple(args.classes)
         )
+    
+    # Ensure all data (including synthetic) is preprocessed for the model if not already
+    from QCNN.utils.data_preprocessing import preprocess_for_quantum
+    if dataset_type == 'synthetic':
+        print(f"  Preprocessing synthetic dataset for {config.encoding_type}...")
+        X_quantum, y_quantum = preprocess_for_quantum(
+            X_quantum, y_quantum, 
+            n_qubits=config.n_qubits, 
+            image_size=config.image_size,
+            normalization=config.preprocessing_mode,
+            encoding_type=config.encoding_type
+        )
 
         # If samples flag is provided, limit the initial dataset so the test set is also small
         if train_sample_size is not None and len(X_quantum) > train_sample_size * 2:
@@ -143,7 +155,7 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
     if (
         X_quantum.ndim == 3
         and X_quantum.shape[1] > 16
-        and config.encoding_type != 'amplitude'
+        and config.encoding_type not in ('amplitude', 'patch')
     ):
         print(f"  Detected high resolution ({X_quantum.shape[1:]}). Downsampling for quantum efficiency...")
         # Simple 2x2 mean pooling downsampling
@@ -264,8 +276,8 @@ if __name__ == "__main__":
                        help='Path to custom dataset file or directory')
     parser.add_argument('--samples', type=int, default=None,
                        help='Number of training samples to use')
-    parser.add_argument('--use-bce', action='store_true',
-                       help='Use Binary Cross-Entropy loss (default is MSE)')
+    parser.add_argument('--use-mse', action='store_true',
+                       help='Use Mean Squared Error loss instead of BCE')
     parser.add_argument('--encoding', type=str, default='auto',
                        choices=['auto', 'feature_map', 'amplitude', 'patch'],
                        help='Encoding strategy to use')
@@ -290,7 +302,7 @@ if __name__ == "__main__":
         # Run main with arguments
         model, acc = main(
             train_sample_size=args.samples,
-            use_bce=args.use_bce,
+            use_bce=not args.use_mse,
             dataset_path=args.path,
             dataset_type=args.dataset,
             encoding=args.encoding,
