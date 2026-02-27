@@ -7,31 +7,31 @@ setlocal enabledelayedexpansion
 :: Handle flags passed as first argument
 set "first_arg=%~1"
 if "!first_arg:~0,2!"=="--" (
-    echo Detected flags. Using default dataset (MNIST/auto)...
-    python main.py --dataset auto --path datasets/MNIST --encoding auto --image-size 28 --classes 0 1 --no-profile %*
+    echo Detected flags. Using default Research Configuration (MNIST-IDX/Amplitude)...
+    python main.py --dataset idx --path datasets/MNIST/ --samples 500 --encoding amplitude --learning-rate 0.005 --no-profile %*
     exit /b %errorlevel%
 )
 
 :: Configuration with defaults
 set "DATASET_TYPE=%~1"
-if "%DATASET_TYPE%"=="" set "DATASET_TYPE=auto"
+if "%DATASET_TYPE%"=="" set "DATASET_TYPE=idx"
 
 set "DATASET_PATH=%~2"
-if "%DATASET_PATH%"=="" set "DATASET_PATH=datasets/MNIST"
+if "%DATASET_PATH%"=="" set "DATASET_PATH=datasets/MNIST/"
 
 set "ENCODING=%~3"
-if "%ENCODING%"=="" set "ENCODING=auto"
+if "%ENCODING%"=="" set "ENCODING=amplitude"
 
 set "IMAGE_SIZE=%~4"
 if "%IMAGE_SIZE%"=="" set "IMAGE_SIZE=28"
 
-set "CLASS_A=%~5"
-if "%CLASS_A%"=="" set "CLASS_A=0"
+set "SAMPLES=%~5"
+if "%SAMPLES%"=="" set "SAMPLES=500"
 
-set "CLASS_B=%~6"
-if "%CLASS_B%"=="" set "CLASS_B=1"
+set "LEARNING_RATE=%~6"
+if "%LEARNING_RATE%"=="" set "LEARNING_RATE=0.005"
 
-:: Shift arguments to pass remaining flags to python
+:: Shift arguments
 shift
 shift
 shift
@@ -40,11 +40,11 @@ shift
 shift
 
 echo ------------------------------------------------
-echo Quantum Native QCNN - Training Launcher (Win)
+echo Quantum Native QCNN - Research Accuracy Launcher (Win)
 echo ------------------------------------------------
-echo Dataset: %DATASET_PATH% (%DATASET_TYPE%)
+echo Dataset: %DATASET_TYPE%
 echo Encoding: %ENCODING% (Size: %IMAGE_SIZE%)
-echo Classes: %CLASS_A% vs %CLASS_B%
+echo Samples: %SAMPLES% | LR: %LEARNING_RATE%
 echo ------------------------------------------------
 
 :: Check for virtual environment
@@ -54,7 +54,8 @@ if exist .venv\Scripts\python.exe (
         --path "%DATASET_PATH%" ^
         --encoding "%ENCODING%" ^
         --image-size "%IMAGE_SIZE%" ^
-        --classes "%CLASS_A%" "%CLASS_B%" ^
+        --samples "%SAMPLES%" ^
+        --learning-rate "%LEARNING_RATE%" ^
         --no-profile ^
         %*
 ) else (
@@ -63,7 +64,8 @@ if exist .venv\Scripts\python.exe (
         --path "%DATASET_PATH%" ^
         --encoding "%ENCODING%" ^
         --image-size "%IMAGE_SIZE%" ^
-        --classes "%CLASS_A%" "%CLASS_B%" ^
+        --samples "%SAMPLES%" ^
+        --learning-rate "%LEARNING_RATE%" ^
         --no-profile ^
         %*
 )
