@@ -78,17 +78,17 @@ class PureQuantumNativeCNN:
         conv_depth = 2
         kernel_shape = (4, conv_depth, 2)
         for layer in range(self.config.n_conv_layers):
-            kernel_tensor = pnp.array(np.random.normal(0, 0.3, kernel_shape), requires_grad=True)
+            kernel_tensor = pnp.array(np.random.normal(0, 0.1, kernel_shape), requires_grad=True)
             params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
 
         # Pooling layer parameters:
         # We consume 3 angles per (keep, discard) pair in QuantumNativePooling.quantum_unitary_pooling.
         max_pairs = self.num_qubits // 2
         pool_angles = 3 * max_pairs
-        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.3, pool_angles), requires_grad=True)
+        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.1, pool_angles), requires_grad=True)
 
         # Fully connected classifier layer (on up to last 2 active qubits)
-        params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.3, 8), requires_grad=True)
+        params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.1, 8), requires_grad=True)
 
         return params
 
@@ -243,13 +243,32 @@ class PureQuantumNativeCNN:
         """
         if self.config.encoding_type == 'patch' and self.quanv_layer is not None:
             # Apply quanvolutional preprocessing
-            if x.ndim == 2 and x.shape[0] != x.shape[1]:
-                return self.quanv_layer.process_batch(x)
+            # A batch of images is 3D (n_samples, h, w) or 2D if flattened (n_samples, h*w)
+            # A single image is 2D (h, w) or 1D if flattened (h*w)
+            
+            # Check if it's a batch
+            is_batched = False
+            if x.ndim == 3:
+                is_batched = True
+            elif x.ndim == 2:
+                # If it's 2D, it could be (h, w) or (batch, features)
+                # We assume if it's not square or matches n_samples from elsewhere, it's a batch.
+                # However, the most reliable way in this context is to check if it matches image_size
+                h, w = x.shape
+                if h != self.config.image_size or w != self.config.image_size:
+                    is_batched = True
+            
+            if is_batched:
+                return self.quanv_layer.process_batch(x, image_size=self.config.image_size)
             return self.quanv_layer.process_image(x)
+            
         elif self.config.encoding_type == 'amplitude':
             # Ensure input is at most 2D: (features,) or (batch_size, features)
             if x.ndim > 2:
                 x = x.reshape(x.shape[0], -1)
+            elif x.ndim == 1:
+                # If it's 1D, it's already a feature vector.
+                pass
             
             # Ensure length is power of 2 for amplitude encoding
             target_len = 2 ** self.num_qubits

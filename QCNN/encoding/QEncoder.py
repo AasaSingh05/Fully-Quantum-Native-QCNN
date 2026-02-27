@@ -21,6 +21,22 @@ class PureQuantumEncoder:
             wires: list of qubit indices for the embedding
         """
         data = np.asarray(data)
+        
+        # Flatten spatial dimensions if they exist (e.g., [batch, h, w] -> [batch, h*w])
+        if data.ndim > 2:
+            data = data.reshape(data.shape[0], -1)
+        elif data.ndim == 2:
+            # Check if it's a batch of flattened vectors or a single image
+            # In QCNN context, we often deal with square images.
+            # If it's a batch, it should be (batch_size, features).
+            # If it's a single image, it's (h, w).
+            # However, AmplitudeEmbedding expects 1D or 2D.
+            # If it's 2D and we want it to be a single sample, we must flatten it to 1D.
+            # But wait, if it's 2D and it's a batch, we leave it.
+            # The calling code should have already decided if it's a batch.
+            # To be safe, if the caller didn't flatten the single image (h, w), we should.
+            pass
+            
         is_batched = data.ndim == 2
         max_size = 2 ** len(wires)
         
@@ -50,7 +66,7 @@ class PureQuantumEncoder:
             data_norm = data / (np.linalg.norm(data) + 1e-10)
         
         # Pure quantum encoding - natively supports batched input
-        qml.AmplitudeEmbedding(features=data_norm, wires=wires, normalize=True)
+        print("data_norm shape:", data_norm.shape); qml.AmplitudeEmbedding(features=data_norm, wires=wires, normalize=True)
     
     @staticmethod
     def quantum_feature_map(data: np.ndarray, wires: list[int]) -> None:
