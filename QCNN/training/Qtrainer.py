@@ -247,7 +247,11 @@ class QuantumNativeTrainer:
         # Restore best quantum parameters
         model.quantum_params = best_quantum_params
         
-        # Ensure Results/Weights directory exists
+        final_msg = f"\nFinal Research Best Test Accuracy: {best_accuracy:.2%}\n"
+        print(final_msg)
+        if summary_filepath:
+            with open(summary_filepath, 'a', encoding='utf-8') as sf:
+                sf.write(final_msg)
         weights_dir = os.path.join('Results', 'Weights')
         os.makedirs(weights_dir, exist_ok=True)
 

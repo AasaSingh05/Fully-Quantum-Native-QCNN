@@ -95,23 +95,27 @@ class QuantumNativeConvolution:
         return 4 * depth * 2
 
     @staticmethod
-    def get_conv_windows(image_size: int) -> list[list[int]]:
+    def get_conv_windows(width: int, height: int = None) -> list[list[int]]:
         """
-        Generates all 2×2 convolution windows for an image-size × image-size qubit grid.
+        Generates all 2×2 convolution windows for a width × height qubit grid.
         Windows are returned as lists of 4 qubit indices in raster-scan order.
 
         Args:
-            image_size: width/height of square grid
+            width: width of the grid
+            height: height of the grid (defaults to width if square)
 
         Returns:
             List of 4-qubit windows (as index lists) for sliding 2×2 convolution.
         """
+        if height is None:
+            height = width
+            
         windows = []
-        for row in range(image_size - 1):
-            for col in range(image_size - 1):
-                top_left = row * image_size + col
-                top_right = row * image_size + (col + 1)
-                bottom_left = (row + 1) * image_size + col
-                bottom_right = (row + 1) * image_size + (col + 1)
+        for row in range(height - 1):
+            for col in range(width - 1):
+                top_left = row * width + col
+                top_right = row * width + (col + 1)
+                bottom_left = (row + 1) * width + col
+                bottom_right = (row + 1) * width + (col + 1)
                 windows.append([top_left, top_right, bottom_left, bottom_right])
         return windows

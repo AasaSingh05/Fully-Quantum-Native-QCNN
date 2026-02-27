@@ -56,8 +56,9 @@ from QCNN.utils.metadata_logger import save_metadata
 print("Starting main execution script...")  # Debug to monitor re-imports
 
 
-def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type='synthetic', 
-         encoding='feature_map', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt"):
+def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
+         encoding='feature_map', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt",
+         learning_rate=None):
     """Main execution function
     
     Args:
@@ -83,6 +84,8 @@ def main(train_sample_size=None, use_bce=False, dataset_path=None, dataset_type=
         image_size = 4 if dataset_type == 'synthetic' else 28 # Default for MNIST/others
     
     config = QuantumNativeConfig.from_image_size(image_size, encoding)
+    if learning_rate is not None:
+        config.learning_rate = learning_rate
     
     print(f" Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")
     print(f" Encoding: {config.encoding_type}")
@@ -291,6 +294,8 @@ if __name__ == "__main__":
                        help='File to save epoch summaries (default: training_summary.txt)')
     parser.add_argument('--no-profile', action='store_true',
                        help='Disable cProfile performance profiling')
+    parser.add_argument('--learning-rate', type=float, default=None,
+                       help='Learning rate for quantum optimization')
     
     args = parser.parse_args()
     
@@ -308,7 +313,8 @@ if __name__ == "__main__":
             encoding=args.encoding,
             image_size=args.image_size,
             log_file=args.log_file,
-            summary_log_file=args.summary_log
+            summary_log_file=args.summary_log,
+            learning_rate=args.learning_rate
         )
         
         if not args.no_profile:

@@ -176,10 +176,15 @@ class PureQuantumNativeCNN:
             # Apply quantum convolution to all windows on the CURRENT active layout
             n_current = len(active_qubits)
             if n_current >= 4:
-                # Calculate logical square root for the grid
-                # If non-square (e.g. 8), sqrt(8)~2.8 -> size=2 -> 1 window
-                current_grid_dim = int(math.sqrt(n_current))
-                base_windows = QuantumNativeConvolution.get_conv_windows(current_grid_dim)  # relative windows
+                # Calculate logical dimensions for the grid
+                width = int(math.sqrt(n_current))
+                while n_current % width != 0:
+                    width -= 1
+                height = n_current // width
+                
+                # Use max as width for standard sliding
+                w, h = max(width, height), min(width, height)
+                base_windows = QuantumNativeConvolution.get_conv_windows(w, h)  # relative windows
                 kernel = params[f'quantum_conv_kernel_{layer}']  # shared weights: (4, depth, 2)
 
                 for rel_window in base_windows:
