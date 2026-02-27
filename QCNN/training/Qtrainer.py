@@ -191,8 +191,7 @@ class QuantumNativeTrainer:
                 params_flat = self.quantum_optimizer.apply_grad(grad, (params_flat,))[0]
                 
                 # Safe logging of real values
-                print(f"  Batch loss: {float(loss_val):.6f}")
-                
+                # Batch loss is computed; stats will be printed after circuit execution
                 epoch_quantum_loss += float(loss_val)
                 n_quantum_batches += 1
 
@@ -202,9 +201,9 @@ class QuantumNativeTrainer:
                 
                 # Print diagnostic info (captured by Logger)
                 print(
-                    f"\nEpoch {epoch+1} Batch {i//model.config.batch_size+1} stats:"
-                    f" min: {quantum_outputs.min():.3f}, max: {quantum_outputs.max():.3f}, "
-                    f"mean: {quantum_outputs.mean():.3f}"
+                    f"Epoch {epoch+1} Batch {i//model.config.batch_size+1} | "
+                    f"Loss: {float(loss_val):.6f} | "
+                    f"Stats: min: {quantum_outputs.min():.3f}, max: {quantum_outputs.max():.3f}, mean: {quantum_outputs.mean():.3f}"
                 )
             
             avg_loss = epoch_quantum_loss / max(1, n_quantum_batches)
@@ -226,13 +225,12 @@ class QuantumNativeTrainer:
             estimated_total = elapsed / ((epoch + 1) / n_epochs)
             remaining = estimated_total - elapsed
             epoch_summary_text = (
-                f"\n--- Epoch {epoch+1}/{n_epochs} Summary ---\n"
-                f"  Loss: {avg_loss:.4f}\n"
-                f"  Train Accuracy: {train_accuracy:.1%}\n"
-                f"  Test Accuracy: {test_accuracy:.1%}\n"
-                f"  Progress: {progress_percent:.1f}%\n"
-                f"  ETA: {remaining:.1f}s\n"
-                f"{'-' * 30}"
+                f"--- Epoch {epoch+1}/{n_epochs} | "
+                f"Loss: {avg_loss:.4f} | "
+                f"Train Acc: {train_accuracy:.1%} | "
+                f"Test Acc: {test_accuracy:.1%} | "
+                f"Progress: {progress_percent:.1f}% | "
+                f"ETA: {remaining:.1f}s ---"
             )
             print(epoch_summary_text)
 
