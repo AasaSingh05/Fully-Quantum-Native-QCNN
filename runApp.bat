@@ -7,8 +7,8 @@ setlocal enabledelayedexpansion
 :: Handle flags passed as first argument
 set "first_arg=%~1"
 if "!first_arg:~0,2!"=="--" (
-    echo Detected flags. Using default Research Configuration (MNIST-IDX/Amplitude)...
-    python main.py --dataset idx --path datasets/MNIST/ --samples 500 --encoding amplitude --learning-rate 0.005 --no-profile %*
+    echo Detected flags. Using default Configuration...
+    python main.py --dataset idx --path datasets/MNIST/ --encoding amplitude --learning-rate 0.005 --no-profile %*
     exit /b %errorlevel%
 )
 
@@ -26,7 +26,7 @@ set "IMAGE_SIZE=%~4"
 if "%IMAGE_SIZE%"=="" set "IMAGE_SIZE=28"
 
 set "SAMPLES=%~5"
-if "%SAMPLES%"=="" set "SAMPLES=500"
+if "%SAMPLES%"=="" set "SAMPLES="
 
 set "LEARNING_RATE=%~6"
 if "%LEARNING_RATE%"=="" set "LEARNING_RATE=0.005"
@@ -40,12 +40,16 @@ shift
 shift
 
 echo ------------------------------------------------
-echo Quantum Native QCNN - Research Accuracy Launcher (Win)
+echo Quantum Native QCNN - Training Launcher (Win)
 echo ------------------------------------------------
 echo Dataset: %DATASET_TYPE%
 echo Encoding: %ENCODING% (Size: %IMAGE_SIZE%)
-echo Samples: %SAMPLES% | LR: %LEARNING_RATE%
+if "%SAMPLES%"=="" (echo Samples: All ^| LR: %LEARNING_RATE%) else (echo Samples: %SAMPLES% ^| LR: %LEARNING_RATE%)
 echo ------------------------------------------------
+
+:: Build samples flag
+set "SAMPLES_FLAG="
+if not "%SAMPLES%"=="" set "SAMPLES_FLAG=--samples "%SAMPLES%""
 
 :: Check for virtual environment
 if exist .venv\Scripts\python.exe (
@@ -54,7 +58,7 @@ if exist .venv\Scripts\python.exe (
         --path "%DATASET_PATH%" ^
         --encoding "%ENCODING%" ^
         --image-size "%IMAGE_SIZE%" ^
-        --samples "%SAMPLES%" ^
+        %SAMPLES_FLAG% ^
         --learning-rate "%LEARNING_RATE%" ^
         --no-profile ^
         %*
@@ -64,7 +68,7 @@ if exist .venv\Scripts\python.exe (
         --path "%DATASET_PATH%" ^
         --encoding "%ENCODING%" ^
         --image-size "%IMAGE_SIZE%" ^
-        --samples "%SAMPLES%" ^
+        %SAMPLES_FLAG% ^
         --learning-rate "%LEARNING_RATE%" ^
         --no-profile ^
         %*

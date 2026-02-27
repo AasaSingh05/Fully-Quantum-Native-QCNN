@@ -5,7 +5,7 @@ This repository implements a **fully quantum-native convolutional neural network
 
 The current prototype operates on **4×4 images mapped onto a 16-qubit grid**, using translationally shared quantum kernels, unitary pooling layers, and a variational quantum head. All training is performed using differentiable quantum circuits and parameter-shift gradients.
 
-This project is part of a broader research effort toward **quantum-native deep learning architectures** suitable for near-term quantum devices.
+This project is part of a broader effort toward **quantum-native deep learning architectures** suitable for near-term quantum devices.
 
 ---
 
@@ -218,7 +218,7 @@ Results/4Circuit/
 - Gradient variance diagnostics  
 - Hybrid QCNN/CNN baseline comparisons  
 - Real datasets (downsampled MNIST / Fashion-MNIST)  
-- Preparation of an arXiv-ready research paper  
+- Preparation of an arXiv-ready technical paper
 
 ---
 

@@ -222,7 +222,7 @@ config = QuantumNativeConfig()
 
 # Your NPZ file with any feature count
 X, y = load_dataset(
-    source='my_research_data.npz',
+    source='my_data.npz',
     dataset_type='npz',
     n_qubits=config.n_qubits,
     image_size=config.image_size,

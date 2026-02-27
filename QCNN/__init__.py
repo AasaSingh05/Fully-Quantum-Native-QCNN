@@ -4,7 +4,7 @@ Pure Quantum Native QCNN Binary Classifier
 """
 
 __version__ = "1.0.0"
-__author__ = "Quantum Research Team"
+__author__ = "Quantum Neural Network Team"
 
 # Main imports for easy access
 from .config.Qconfig import QuantumNativeConfig

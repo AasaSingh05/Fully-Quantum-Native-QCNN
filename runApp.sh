@@ -2,11 +2,10 @@
 
 # If the first argument is a flag (starts with --), use defaults for positional arguments
 if [[ "$1" == --* ]]; then
-    echo "Detected flags. Using default Research Configuration (MNIST-IDX/Amplitude)..."
+    echo "Detected flags. Using default Configuration..."
     ./.venv/bin/python main.py \
         --dataset "idx" \
         --path "datasets/MNIST/" \
-        --samples 500 \
         --encoding "amplitude" \
         --learning-rate 0.005 \
         --summary-log "training_summary.txt" \
@@ -27,19 +26,19 @@ ENCODING="${3:-amplitude}"
 # 4. Image Size
 IMAGE_SIZE="${4:-28}"
 
-# 5. Samples
-SAMPLES="${5:-500}"
+# 5. Samples (Empty uses the entire dataset)
+SAMPLES="${5:-}"
 
 # 6. Learning Rate
 LEARNING_RATE="${6:-0.005}"
 
 # Run main python script using the project virtual environment
 echo "------------------------------------------------"
-echo "Quantum Native QCNN - Research Accuracy Launcher"
+echo "Quantum Native QCNN - Training Launcher"
 echo "------------------------------------------------"
 echo "Dataset: $DATASET_TYPE"
 echo "Encoding: $ENCODING (Size: $IMAGE_SIZE)"
-echo "Samples: $SAMPLES | LR: $LEARNING_RATE"
+echo "Samples: ${SAMPLES:-All} | LR: $LEARNING_RATE"
 echo "------------------------------------------------"
 
 ./.venv/bin/python main.py \
@@ -47,7 +46,7 @@ echo "------------------------------------------------"
     --path "$DATASET_PATH" \
     --encoding "$ENCODING" \
     --image-size "$IMAGE_SIZE" \
-    --samples "$SAMPLES" \
+    ${SAMPLES:+--samples "$SAMPLES"} \
     --learning-rate "$LEARNING_RATE" \
     --summary-log "training_summary.txt" \
     --no-profile \
