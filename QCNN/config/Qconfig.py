@@ -32,7 +32,7 @@ class QuantumNativeConfig:
         
         # Quantum training parameters
         self.learning_rate = 0.01
-        self.n_epochs = 100
+        self.n_epochs = 20
         self.batch_size = 16
         
         # Quantum device
@@ -115,5 +115,7 @@ class QuantumNativeConfig:
         return config
 
 
-config = QuantumNativeConfig()
-print(f"Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")
+
+if __name__ == "__main__":
+    config = QuantumNativeConfig()
+    print(f"Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")

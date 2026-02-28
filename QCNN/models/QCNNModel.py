@@ -39,7 +39,7 @@ class PureQuantumNativeCNN:
                 patch_size=config.patch_size,
                 n_filters=config.n_quanv_filters,
                 stride=config.patch_stride,
-                device_name='default.qubit',  # Safer device for backprop
+                device_name=config.device,  # Use configured device (e.g. lightning.qubit)
                 random_params=True
             )
 

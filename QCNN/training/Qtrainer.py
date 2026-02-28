@@ -121,14 +121,14 @@ class QuantumNativeTrainer:
             cache_path = os.path.join(cache_dir, f"quanv_cache_{cache_key}.npz")
 
             if os.path.exists(cache_path):
-                print(f"\nLoading cached Quanvolutional Features from '{cache_path}'...")
+                print(f"\n[CACHE HIT] Loading pre-calculated Quanvolutional Features from '{cache_path}'...")
                 cached = np.load(cache_path)
                 X_train = cached['X_train']
                 X_test = cached['X_test']
-                print(f"  Cache loaded. Shape: {X_train.shape[1:]}")
+                print(f"  Features loaded. Training set: {len(X_train)} samples, Test set: {len(X_test)} samples")
             else:
-                print("\nPre-calculating Quanvolutional Features...")
-                print("  (This speeds up training by 100x since filters are fixed)")
+                print(f"\n[CACHE MISS] Pre-calculating Quanvolutional Features for {len(X_train) + len(X_test)} total samples...")
+                print("  (This is an expensive one-time quantum simulation to speed up training by 100x)")
                 X_train = model.quanv_layer.process_batch(X_train)
                 X_test = model.quanv_layer.process_batch(X_test)
                 np.savez(cache_path, X_train=X_train, X_test=X_test)

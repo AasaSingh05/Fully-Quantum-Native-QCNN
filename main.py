@@ -53,7 +53,7 @@ from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
 from QCNN.utils.dataset_loader import load_dataset
 from QCNN.utils.metadata_logger import save_metadata
 
-print("Starting main execution script...")  # Debug to monitor re-imports
+    # Note: No top-level prints here to avoid clutter in multiprocess workers
 
 
 def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
@@ -132,6 +132,18 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
             classes=tuple(args.classes)
         )
     
+    # NEW: Limit total dataset size if requested, BEFORE splitting and expensive preprocessing.
+    # This ensuring both train and test sets are small enough for quantum simulation.
+    if train_sample_size is not None and len(X_quantum) > train_sample_size:
+        # We take a slightly larger pool so that after 70/30 split, 
+        # the training set is exactly train_sample_size.
+        total_needed = int(train_sample_size / 0.7)
+        if total_needed < len(X_quantum):
+            print(f"  Limiting total dataset to {total_needed} samples for efficiency (target train: {train_sample_size})...")
+            indices = np.random.choice(len(X_quantum), total_needed, replace=False)
+            X_quantum = X_quantum[indices]
+            y_quantum = y_quantum[indices]
+
     # Ensure all data (including synthetic) is preprocessed for the model if not already
     from QCNN.utils.data_preprocessing import preprocess_for_quantum
     if dataset_type == 'synthetic':
@@ -143,13 +155,6 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
             normalization=config.preprocessing_mode,
             encoding_type=config.encoding_type
         )
-
-        # If samples flag is provided, limit the initial dataset so the test set is also small
-        if train_sample_size is not None and len(X_quantum) > train_sample_size * 2:
-            print(f"  Limiting initial dataset to {train_sample_size * 2} samples for efficiency...")
-            indices = np.random.choice(len(X_quantum), train_sample_size * 2, replace=False)
-            X_quantum = X_quantum[indices]
-            y_quantum = y_quantum[indices]
     
     print("Dataset ready.")
     # Auto-downsample only when not using amplitude encoding,
@@ -270,6 +275,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
 
 
 if __name__ == "__main__":
+    print("Starting main execution script...")
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Train Quantum CNN with custom or synthetic datasets')
     parser.add_argument('--dataset', type=str, default='images',

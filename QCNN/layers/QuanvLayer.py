@@ -201,8 +201,9 @@ class QuanvolutionalLayer:
 
     def process_batch(self, X: np.ndarray, image_size: int = None) -> np.ndarray:
         """
-        Apply quanvolutional preprocessing to a batch of images.
-        Sequential execution for maximum stability with PennyLane contexts.
+        Apply quanvolutional preprocessing to a batch of images using multiprocessing.
+        Using separate processes avoids GIL issues and ensures better stability
+        with PennyLane device initialization.
 
         Args:
             X: Batch of images, shape (n_samples, features) or (n_samples, h, w)
@@ -211,19 +212,41 @@ class QuanvolutionalLayer:
         Returns:
             Reduced feature array (n_samples, reduced_features)
         """
-        results = []
-        total = len(X)
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        import os
         
-        print(f"  Starting Quanv batch processing ({total} samples)...")
-        for i, x in enumerate(X):
-            if x.ndim == 1 and image_size is not None:
-                x = x.reshape(image_size, image_size)
+        total = len(X)
+        print(f"  Starting multiprocess Quanv processing ({total} samples)...", flush=True)
+        
+        # We need to pass necessary parameters to the worker since it's a separate process
+        worker_args = [
+            (i, x, self.patch_size, self.n_filters, self.stride, self.device_name, self.filter_params, image_size)
+            for i, x in enumerate(X)
+        ]
+
+        # Use CPU count - 1, capped at 5 to avoid oversubscription
+        max_workers = min(max(1, (os.cpu_count() or 4) - 1), 5)
+        
+        results = [None] * total
+        processed_count = 0
+        
+        # Use ProcessPoolExecutor for true parallelism
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Submit tasks
+            future_to_idx = {executor.submit(_quanv_worker_task, arg): arg[0] for arg in worker_args}
             
-            features = self.process_image(x)
-            results.append(features)
-            
-            if (i + 1) % 50 == 0 or (i + 1) == total:
-                print(f"  Quanv preprocessing: {i + 1}/{total} samples")
+            # Use as_completed to get results as they finish (out of order is fine here)
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    _, features = future.result()
+                    results[idx] = features
+                    processed_count += 1
+                    
+                    if processed_count % 5 == 0 or processed_count == total:
+                        print(f"  Quanv preprocessing: {processed_count}/{total} samples", flush=True)
+                except Exception as e:
+                    print(f"  [ERROR] Worker for sample {idx} failed: {e}", flush=True)
 
         return np.array(results)
 
@@ -239,3 +262,59 @@ class QuanvolutionalLayer:
         """
         out_dim = (image_size - self.patch_size) // self.stride + 1
         return out_dim * out_dim * self.n_filters
+
+def _quanv_worker_task(args):
+    """
+    Independent worker task for multiprocessing.
+    Must be a top-level function for pickling support.
+    """
+    idx, img, patch_size, n_filters, stride, device_name, filter_params, image_size = args
+    import pennylane as qml
+    import numpy as np
+    
+    # Reshape if needed
+    if img.ndim == 1 and image_size is not None:
+        img = img.reshape(image_size, image_size)
+    
+    # 1. Initialize thread/process local device and QNode
+    n_qubits = patch_size ** 2
+    dev = qml.device(device_name, wires=n_qubits)
+
+    @qml.qnode(dev, interface='autograd')
+    def _quantum_filter(patch_data, f_params):
+        for i in range(n_qubits):
+            if i < len(patch_data):
+                qml.RY(patch_data[i], wires=i)
+        for i in range(n_qubits):
+            qml.RY(f_params[i, 0], wires=i)
+            qml.RZ(f_params[i, 1], wires=i)
+        for i in range(n_qubits - 1):
+            qml.CNOT(wires=[i, i + 1])
+        for i in range(n_qubits):
+            qml.RY(f_params[i, 2], wires=i)
+        return qml.expval(qml.PauliZ(0))
+
+    # 2. Process image
+    h, w = img.shape
+    img_min, img_max = img.min(), img.max()
+    if img_max - img_min > 1e-10:
+        img = (img - img_min) / (img_max - img_min) * 2 * np.pi
+
+    patches = []
+    for r in range(0, h - patch_size + 1, stride):
+        for c in range(0, w - patch_size + 1, stride):
+            patch = img[r:r + patch_size, c:c + patch_size]
+            patches.append((patch.flatten(), r, c))
+
+    out_h = (h - patch_size) // stride + 1
+    out_w = (w - patch_size) // stride + 1
+    feature_map = np.zeros((out_h, out_w, n_filters))
+
+    for patch_data, r, c in patches:
+        r_idx = r // stride
+        c_idx = c // stride
+        for f_idx, f_params in enumerate(filter_params):
+            result = _quantum_filter(patch_data, f_params)
+            feature_map[r_idx, c_idx, f_idx] = float(result)
+
+    return idx, feature_map.flatten()
