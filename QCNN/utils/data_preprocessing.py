@@ -167,12 +167,37 @@ def encode_labels(labels: np.ndarray,
         raise ValueError(f"Unknown encoding: {encoding}")
 
 
+def encode_labels_ovr(labels: np.ndarray, target_digit: int) -> np.ndarray:
+    """
+    One-vs-rest binary label encoding for quantum classification.
+
+    Maps ``target_digit`` → +1 and every other class value → -1.
+    Works with any number of input classes, making it suitable for
+    datasets like MNIST (10 classes) without any prior class filtering.
+
+    Args:
+        labels:       1-D integer array of raw class labels.
+        target_digit: The class label to treat as the positive class (+1).
+
+    Returns:
+        1-D int8 numpy array with values in {-1, +1}.
+    """
+    labels = np.asarray(labels)
+    encoded = np.where(labels == target_digit, 1, -1).astype(np.int8)
+    n_pos = int(np.sum(encoded == 1))
+    n_neg = int(np.sum(encoded == -1))
+    print(f"  OvR label encoding: digit {target_digit} → +1 ({n_pos} samples), "
+          f"all others → -1 ({n_neg} samples)")
+    return encoded
+
+
 def preprocess_for_quantum(X: np.ndarray, 
                            y: np.ndarray,
                            n_qubits: int,
                            image_size: Optional[int] = None,
                            normalization: str = 'minmax',
-                           encoding_type: str = 'feature_map') -> Tuple[np.ndarray, np.ndarray]:
+                           encoding_type: str = 'feature_map',
+                           target_digit: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Complete preprocessing pipeline for quantum circuit compatibility.
     
@@ -183,6 +208,10 @@ def preprocess_for_quantum(X: np.ndarray,
         image_size: If provided, objective image size for resizing/reshaping
         normalization: Normalization method
         encoding_type: 'feature_map', 'amplitude', or 'patch'
+        target_digit: If provided, use one-vs-rest encoding (target → +1,
+                      all others → -1). When None the old strict binary
+                      encoder is used (requires labels to already have
+                      exactly 2 unique values).
     
     Returns:
         Preprocessed (X, y) ready for quantum encoding/processing
@@ -228,6 +257,11 @@ def preprocess_for_quantum(X: np.ndarray,
     X_normalized = normalize_to_quantum_range(X, method=normalization)
     
     # 3. Encode labels to {-1, +1}
-    y_encoded = encode_labels(y, encoding='binary')
+    if target_digit is not None:
+        # One-vs-rest: target digit → +1, everything else → -1
+        y_encoded = encode_labels_ovr(y, target_digit)
+    else:
+        # Legacy strict binary encoder (y must already have exactly 2 unique values)
+        y_encoded = encode_labels(y, encoding='binary')
     
     return X_normalized, y_encoded

@@ -2,7 +2,16 @@ import math
 
 
 class QuantumNativeConfig:
-    """Configuration ensuring purely quantum operations"""
+    """
+    Configuration for the fully quantum-native QCNN.
+
+    Binary classification mode
+    --------------------------
+    The QCNN produces a single ⟨Z⟩ readout and therefore supports binary
+    classification only.  Use ``target_digit`` to choose which class is
+    treated as the positive class (+1).  All other classes map to −1
+    (one-vs-rest).  For MNIST this is any digit 0–9.
+    """
     
     def __init__(self):
         # Data parameters
@@ -10,9 +19,16 @@ class QuantumNativeConfig:
         self.n_qubits = self.image_size ** 2  # Default: 1 qubit per pixel
         
         # Dataset parameters
-        self.n_classes = 2  # Binary classification
+        self.n_classes = 2  # Binary classification (one-vs-rest)
         self.n_features = self.image_size ** 2  # Total input features
         self.preprocessing_mode = 'minmax'  # 'minmax', 'standard', 'robust'
+
+        # One-vs-rest binary classification target
+        # Set target_digit to the class label you want the model to learn.
+        # For MNIST: 0-9  |  For synthetic data: ignored (labels already {-1,+1})
+        # All other classes are mapped to label -1 automatically.
+        self.target_digit = 0   # ← CHANGE THIS to classify a different digit
+        self.binary_mode  = 'one_vs_rest'  # only supported mode currently
         
         # Encoding strategy: 'feature_map', 'amplitude', 'patch'
         #   feature_map  – 1 qubit per feature (original, image_size² qubits)

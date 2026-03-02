@@ -107,14 +107,15 @@ class QuantumNativeTrainer:
             os.makedirs(cache_dir, exist_ok=True)
 
             hash_input = (
-                f"{X_train.shape}_{X_test.shape}_"
+                f"{X_train.shape[1:]}_"  # Data resolution
                 f"{model.quanv_layer.patch_size}_{model.quanv_layer.stride}_"
                 f"{model.quanv_layer.n_filters}"
             )
-            # Include a hash of the actual pixel data so cache invalidates on data change
-            data_hash = hashlib.md5(
-                np.ascontiguousarray(X_train).tobytes()[:8192]  # first 8KB for speed
-            ).hexdigest()[:12]
+            # Hash a signature of the combined data
+            data_signature = np.ascontiguousarray(X_train[:100]).tobytes() + \
+                            np.ascontiguousarray(X_test[:100]).tobytes()
+            data_hash = hashlib.md5(data_signature).hexdigest()[:12]
+            
             cache_key = hashlib.md5(
                 (hash_input + data_hash).encode()
             ).hexdigest()[:16]
@@ -127,10 +128,18 @@ class QuantumNativeTrainer:
                 X_test = cached['X_test']
                 print(f"  Features loaded. Training set: {len(X_train)} samples, Test set: {len(X_test)} samples")
             else:
-                print(f"\n[CACHE MISS] Pre-calculating Quanvolutional Features for {len(X_train) + len(X_test)} total samples...")
+                n_train = len(X_train)
+                total_samples = n_train + len(X_test)
+                print(f"\n[CACHE MISS] Pre-calculating Quanvolutional Features for {total_samples} total samples...")
                 print("  (This is an expensive one-time quantum simulation to speed up training by 100x)")
-                X_train = model.quanv_layer.process_batch(X_train)
-                X_test = model.quanv_layer.process_batch(X_test)
+                
+                # UNIFIED BATCHING: Combine for 100% core utilization
+                X_combined = np.concatenate([X_train, X_test], axis=0)
+                X_processed_all = model.quanv_layer.process_batch(X_combined)
+                
+                X_train = X_processed_all[:n_train]
+                X_test = X_processed_all[n_train:]
+                
                 np.savez(cache_path, X_train=X_train, X_test=X_test)
                 print(f"  Pre-calculation complete. Reduced shape: {X_train.shape[1:]}")
                 print(f"  Cached to '{cache_path}' for future runs.")

@@ -5,6 +5,8 @@
         "n_classes": 2,
         "n_features": 196,
         "preprocessing_mode": "minmax",
+        "target_digit": 0,
+        "binary_mode": "one_vs_rest",
         "encoding_type": "patch",
         "n_conv_layers": 4,
         "kernel_size": 2,

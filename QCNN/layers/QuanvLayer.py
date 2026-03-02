@@ -224,8 +224,9 @@ class QuanvolutionalLayer:
             for i, x in enumerate(X)
         ]
 
-        # Use CPU count - 1, capped at 5 to avoid oversubscription
-        max_workers = min(max(1, (os.cpu_count() or 4) - 1), 5)
+        # Use a fixed number of workers (e.g. 4) to keep intensity low
+        # Total CPU usage will be roughly (max_workers / total_cores)
+        max_workers = 4
         
         results = [None] * total
         processed_count = 0
@@ -235,7 +236,7 @@ class QuanvolutionalLayer:
             # Submit tasks
             future_to_idx = {executor.submit(_quanv_worker_task, arg): arg[0] for arg in worker_args}
             
-            # Use as_completed to get results as they finish (out of order is fine here)
+            # Use as_completed to get results as they finish
             for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]
                 try:
@@ -243,7 +244,7 @@ class QuanvolutionalLayer:
                     results[idx] = features
                     processed_count += 1
                     
-                    if processed_count % 5 == 0 or processed_count == total:
+                    if processed_count % 10 == 0 or processed_count == total:
                         print(f"  Quanv preprocessing: {processed_count}/{total} samples", flush=True)
                 except Exception as e:
                     print(f"  [ERROR] Worker for sample {idx} failed: {e}", flush=True)
@@ -268,6 +269,14 @@ def _quanv_worker_task(args):
     Independent worker task for multiprocessing.
     Must be a top-level function for pickling support.
     """
+    import os
+    # CRITICAL: Limit internal threading to 1 to avoid CPU oversubscription
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
     idx, img, patch_size, n_filters, stride, device_name, filter_params, image_size = args
     import pennylane as qml
     import numpy as np
@@ -301,6 +310,10 @@ def _quanv_worker_task(args):
         img = (img - img_min) / (img_max - img_min) * 2 * np.pi
 
     patches = []
+    # Local worker cache for unique patches within THIS image
+    # For MNIST, many patches are identical (all zeros)
+    patch_cache = {}
+
     for r in range(0, h - patch_size + 1, stride):
         for c in range(0, w - patch_size + 1, stride):
             patch = img[r:r + patch_size, c:c + patch_size]
@@ -313,8 +326,20 @@ def _quanv_worker_task(args):
     for patch_data, r, c in patches:
         r_idx = r // stride
         c_idx = c // stride
-        for f_idx, f_params in enumerate(filter_params):
-            result = _quantum_filter(patch_data, f_params)
-            feature_map[r_idx, c_idx, f_idx] = float(result)
+        
+        # Check if we've already processed this exact patch content
+        patch_key = tuple(np.round(patch_data, 6))
+        
+        if patch_key in patch_cache:
+            results = patch_cache[patch_key]
+        else:
+            results = []
+            for f_idx, f_params in enumerate(filter_params):
+                res = float(_quantum_filter(patch_data, f_params))
+                results.append(res)
+            patch_cache[patch_key] = results
+            
+        for f_idx, res in enumerate(results):
+            feature_map[r_idx, c_idx, f_idx] = res
 
     return idx, feature_map.flatten()

@@ -3,7 +3,7 @@ import os
 from typing import Tuple, Optional, Union
 import struct
 from pathlib import Path
-from .data_preprocessing import preprocess_for_quantum
+from .data_preprocessing import preprocess_for_quantum, encode_labels_ovr
 
 
 def load_npz_dataset(filepath: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -221,6 +221,7 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
                 image_size: Optional[int] = 4,
                 normalization: str = 'minmax',
                 encoding_type: str = 'feature_map',
+                target_digit: Optional[int] = None,
                 **kwargs) -> Tuple[np.ndarray, np.ndarray]:
     """
     Universal dataset loader with automatic preprocessing.
@@ -232,6 +233,8 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         image_size: Target image size (if applicable)
         normalization: Normalization method
         encoding_type: 'feature_map', 'amplitude', or 'patch'
+        target_digit: If provided, use one-vs-rest encoding (target digit → +1,
+                      all other digits → -1). Overrides any 'classes' kwarg.
         **kwargs: Additional arguments for specific loaders
     
     Returns:
@@ -299,11 +302,13 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
             
             X, y = load_idx_dataset(source, labels_path)
             
-        # Filter for binary classification
-        print(f"Filtering for binary classes: {binary_classes}")
-        mask = (y == binary_classes[0]) | (y == binary_classes[1])
-        X = X[mask]
-        y = y[mask]
+        # One-vs-rest: keep full dataset; remapping happens in preprocess_for_quantum.
+        # Legacy two-class filter only applies when target_digit is NOT set.
+        if target_digit is None:
+            print(f"Filtering for binary classes: {binary_classes}")
+            mask = (y == binary_classes[0]) | (y == binary_classes[1])
+            X = X[mask]
+            y = y[mask]
     
     elif dataset_type == 'npz':
         X, y = load_npz_dataset(source)
@@ -334,7 +339,7 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     # Preprocess for quantum circuit
     X_processed, y_processed = preprocess_for_quantum(
         X, y, n_qubits=n_qubits, image_size=image_size, normalization=normalization,
-        encoding_type=encoding_type
+        encoding_type=encoding_type, target_digit=target_digit
     )
     
     print(f"Preprocessed for quantum: {X_processed.shape}, labels: {np.unique(y_processed)}")
