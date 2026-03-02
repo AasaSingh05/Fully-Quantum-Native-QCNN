@@ -31,6 +31,7 @@ REM --- PENNYLANE AND FAST SIMULATORS ---
 echo Installing PennyLane...
 pip install pennylane
 pip install pennylane-lightning
+pip install "autoray<0.8.0"
 
 REM --- OTHER DEPENDENCIES ---
 REM (Add more as needed for your project)

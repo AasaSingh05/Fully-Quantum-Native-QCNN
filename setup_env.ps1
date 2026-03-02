@@ -30,6 +30,7 @@ pip install numpy scipy matplotlib scikit-learn
 Write-Host "Installing PennyLane..." -ForegroundColor Yellow
 pip install pennylane
 pip install pennylane-lightning
+pip install "autoray<0.8.0"
 
 # --- OTHER DEPENDENCIES ---
 # (Add more as needed for your project)
