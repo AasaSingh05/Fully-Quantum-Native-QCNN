@@ -131,7 +131,7 @@ class QuantumNativeTrainer:
                 n_train = len(X_train)
                 total_samples = n_train + len(X_test)
                 print(f"\n[CACHE MISS] Pre-calculating Quanvolutional Features for {total_samples} total samples...")
-                print("  (This is an expensive one-time quantum simulation to speed up training by 100x)")
+                print("  (This is an expensive one-time quantum simulation to speed up subsequent training)")
                 
                 # UNIFIED BATCHING: Combine for 100% core utilization
                 X_combined = np.concatenate([X_train, X_test], axis=0)
@@ -330,8 +330,13 @@ class QuantumNativeTrainer:
                   f"Got [{X.min():.3f}, {X.max():.3f}]")
         
         unique_labels = np.unique(y)
-        if not np.array_equal(unique_labels, np.array([-1, 1])):
-            raise ValueError(
-                f"Labels must be {{-1, +1}} for binary classification. Got {unique_labels}. "
-                f"Use data_preprocessing.encode_labels() to convert your labels."
-            )
+        if getattr(model.config, 'target_digit', None) is None:
+            # Legacy binary mode: requires exactly {-1, 1}
+            if not np.array_equal(unique_labels, np.array([-1, 1])):
+                raise ValueError(
+                    f"Labels must be {{-1, +1}} for binary classification. Got {unique_labels}. "
+                    f"Set target_digit in Qconfig.py to enable one-vs-rest binary mode."
+                )
+        else:
+            # One-vs-rest mode: labels will be processed into {-1, 1} during preprocessing
+            pass

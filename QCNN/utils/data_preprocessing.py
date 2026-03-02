@@ -169,25 +169,41 @@ def encode_labels(labels: np.ndarray,
 
 def encode_labels_ovr(labels: np.ndarray, target_digit: int) -> np.ndarray:
     """
-    One-vs-rest binary label encoding for quantum classification.
-
-    Maps ``target_digit`` → +1 and every other class value → -1.
-    Works with any number of input classes, making it suitable for
-    datasets like MNIST (10 classes) without any prior class filtering.
+    ===========================================================================
+    One-vs-Rest (OvR) Binary Label Encoding for Quantum Classification
+    ===========================================================================
+    
+    The Quantum CNN utilizes a single-qubit expectation value ⟨Z⟩ for its 
+    final readout, which fundamentally restricts it to binary classification 
+    (output range [-1, +1]). 
+    
+    To classify datasets with more than 2 classes (e.g., MNIST with 10 digits),
+    we use a One-vs-Rest strategy:
+      - The `target_digit` becomes the positive class (+1).
+      - Every other digit becomes the negative class (-1).
+      
+    This enables full-dataset training without filtering classes out.
 
     Args:
-        labels:       1-D integer array of raw class labels.
-        target_digit: The class label to treat as the positive class (+1).
+        labels:       1-D integer array of raw multi-class labels.
+        target_digit: The specific class label to treat as the positive class.
 
     Returns:
-        1-D int8 numpy array with values in {-1, +1}.
+        1-D int8 numpy array strictly containing {-1, +1}.
     """
     labels = np.asarray(labels)
+    
+    # Vectorized mapping: target -> +1, everything else -> -1
     encoded = np.where(labels == target_digit, 1, -1).astype(np.int8)
+    
+    # Calculate distribution for logging
     n_pos = int(np.sum(encoded == 1))
     n_neg = int(np.sum(encoded == -1))
-    print(f"  OvR label encoding: digit {target_digit} → +1 ({n_pos} samples), "
-          f"all others → -1 ({n_neg} samples)")
+    
+    print(f"  [Label Encoding] One-vs-Rest split: "
+          f"Digit {target_digit} → +1 ({n_pos} samples) | "
+          f"All others → -1 ({n_neg} samples)")
+          
     return encoded
 
 

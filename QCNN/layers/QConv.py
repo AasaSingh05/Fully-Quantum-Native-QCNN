@@ -1,5 +1,6 @@
 import pennylane as qml
 import pennylane.numpy as pnp
+import numpy as np
 
 
 class QuantumNativeConvolution:

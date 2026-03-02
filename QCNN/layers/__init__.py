@@ -21,4 +21,4 @@ def get_pooling_layer():
     return QuantumNativePooling()
 
 def get_kernel_param_count():
-    return QuantumNativeConvolution.get_kernel_param_count()
+    return QuantumNativeConvolution.get_kernel_param_count(num_qubits=4)

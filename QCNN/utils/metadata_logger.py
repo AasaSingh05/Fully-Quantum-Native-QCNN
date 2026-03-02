@@ -20,5 +20,19 @@ def save_metadata(path, config):
         "seed": 42
     }
 
+    # Custom encoder for JSON to avoid TypeError on non-serializable objects
+    class SafeJSONEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            try:
+                return super().default(obj)
+            except TypeError:
+                return str(obj)
+
     with open(path, "w") as f:
-        json.dump(meta, f, indent=4)
+        json.dump(meta, f, indent=4, cls=SafeJSONEncoder)
