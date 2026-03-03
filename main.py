@@ -5,10 +5,13 @@ import sys
 import os
 import argparse
 import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc, precision_recall_curve, precision_score, recall_score, f1_score
 import cProfile
 import pstats
 import numpy as np, random
+import time
 
 # setting randomness seeds for reproducibility
 np.random.seed(42)
@@ -207,9 +210,13 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     # Step 4: Training
     print("\n Step 4: Training Pure Quantum CNN...")
     trainer = QuantumNativeTrainer(learning_rate=config.learning_rate, use_bce=use_bce)
+    
+    start_time = time.time()
     trained_model = trainer.train_pure_quantum_cnn(
         quantum_model, X_train, y_train, X_test, y_test, log_filepath=log_file, summary_filepath=summary_log_file
     )
+    training_time = time.time() - start_time
+    print(f" Total Training Time: {training_time:.2f} seconds")
 
     # Step 5: Evaluation
     print("\n Step 5: Evaluating Quantum Model...")
@@ -244,14 +251,112 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     print(f"\n Quantum Confusion Matrix:")
     print(f"   True Positives: {tp}")
     print(f"   True Negatives: {tn}")
-    print(f"   False Positives: {fp}")
-    print(f"   False Negatives: {fn}")
+    # Evaluation Metrics
+    # Map predictions from [-1, 1] to [0, 1] for sklearn metrics
+    y_test_bin = np.where(y_test == 1, 1, 0)
+    preds_bin = np.where(predictions == 1, 1, 0)
+    
+    precision = precision_score(y_test_bin, preds_bin, zero_division=0)
+    recall = recall_score(y_test_bin, preds_bin, zero_division=0)
+    f1 = f1_score(y_test_bin, preds_bin, zero_division=0)
+    
+    print(f"\n Evaluation Metrics:")
+    print(f"   Sensitivity (Recall): {recall:.3f}")
+    print(f"   Precision: {precision:.3f}")
+    print(f"   F1 Score: {f1:.3f}")
 
     # Plot training history and save graphs
     try:
         graphs_dir = os.path.join('Results', 'Graphs')
-        os.makedirs(graphs_dir, exist_ok=True)
-        graph_path = os.path.join(graphs_dir, 'quantum_training_results.png')
+        
+        # Save confusion matrix
+        cm_dir = os.path.join(graphs_dir, 'Confusion_Matrix')
+        os.makedirs(cm_dir, exist_ok=True)
+        cm_path = os.path.join(cm_dir, 'quantum_confusion_matrix.png')
+        plt.figure(figsize=(6, 5))
+        cm = np.array([[tn, fp], [fn, tp]])
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                    xticklabels=['Pred -1', 'Pred +1'],
+                    yticklabels=['True -1', 'True +1'])
+        plt.title('Quantum Model Confusion Matrix')
+        plt.tight_layout()
+        plt.savefig(cm_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"\n Confusion matrix saved as '{cm_path}'")
+        
+        # Save ROC Curve
+        # We need continuous probabilities for ROC. Since QCNN outputs values around [-1, 1],
+        # we can scale them to [0, 1] to approximate probabilities.
+        raw_outputs = []
+        for xi in X_eval:
+             # Quick approximation: run circuit directly to get continuous value
+             out = trained_model.quantum_circuit(trained_model._preprocess_input(np.array([xi])), trained_model._flatten_params(trained_model.quantum_params))
+             raw_outputs.append(float(np.squeeze(out)))
+        raw_outputs = np.array(raw_outputs)
+        # Normalize continuous outputs to [0, 1] for roc_curve
+        prob_scores = (raw_outputs - raw_outputs.min()) / (raw_outputs.max() - raw_outputs.min() + 1e-8)
+        
+        fpr, tpr, _ = roc_curve(y_test_bin, prob_scores)
+        roc_auc = auc(fpr, tpr)
+        
+        roc_dir = os.path.join(graphs_dir, 'ROC_Curve')
+        os.makedirs(roc_dir, exist_ok=True)
+        roc_path = os.path.join(roc_dir, 'quantum_roc_curve.png')
+        plt.figure(figsize=(6, 5))
+        plt.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate (Sensitivity)')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc="lower right")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(roc_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f" ROC curve saved as '{roc_path}'")
+        
+        # Save Precision-Recall metrics bar chart
+        metrics_dir = os.path.join(graphs_dir, 'Evaluation_Metrics')
+        os.makedirs(metrics_dir, exist_ok=True)
+        metrics_path = os.path.join(metrics_dir, 'quantum_evaluation_metrics.png')
+        plt.figure(figsize=(6, 5))
+        metric_names = ['Sensitivity', 'Precision', 'F1 Score']
+        metric_vals = [recall, precision, f1]
+        bars = plt.bar(metric_names, metric_vals, color='royalblue')
+        for bar in bars:
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.01, f'{yval:.2f}', ha='center', va='bottom')
+        plt.ylim([0, 1.1])
+        plt.title('Model Performance Metrics')
+        plt.ylabel('Score')
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.savefig(metrics_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f" Evaluation metrics chart saved as '{metrics_path}'")
+        
+        # Extract computation times per epoch from the training loops if available
+        # But we don't have per-epoch time saved in history. We can at least make a chart of time.
+        # Let's save a bar chart showing the total computation time breakdown.
+        time_dir = os.path.join(graphs_dir, 'Computation_Time')
+        os.makedirs(time_dir, exist_ok=True)
+        time_path = os.path.join(time_dir, 'quantum_computation_time.png')
+        plt.figure(figsize=(6, 5))
+        plt.bar(['Total Training Time'], [training_time], color='dodgerblue')
+        plt.text(0, training_time + (training_time*0.02), f'{training_time:.1f}s', ha='center', va='bottom')
+        plt.title('Quantum Computation Time')
+        plt.ylabel('Seconds')
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.savefig(time_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f" Computation time chart saved as '{time_path}'")
+        
+        train_res_dir = os.path.join(graphs_dir, 'Training_Results')
+        os.makedirs(train_res_dir, exist_ok=True)
+        graph_path = os.path.join(train_res_dir, 'quantum_training_results.png')
 
         plt.figure(figsize=(12, 4))
 

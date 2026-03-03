@@ -170,7 +170,8 @@ def load_idx_dataset(images_path: str, labels_path: str) -> Tuple[np.ndarray, np
 
 def load_mnist_subset(n_samples: int = 1000,
                      classes: Tuple[int, int] = (0, 1),
-                     flatten: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+                     flatten: bool = True,
+                     target_digit: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load a subset of MNIST dataset for binary classification.
     
@@ -192,15 +193,46 @@ def load_mnist_subset(n_samples: int = 1000,
     X, y = mnist.data, mnist.target.astype(int)
     
     # Filter for binary classification
-    mask = (y == classes[0]) | (y == classes[1])
-    X = X[mask]
-    y = y[mask]
-    
-    # Limit samples
-    if len(X) > n_samples:
-        indices = np.random.choice(len(X), n_samples, replace=False)
-        X = X[indices]
-        y = y[indices]
+    if target_digit is not None:
+        print(f"Loading balanced MNIST subset for one-vs-rest (target digit {target_digit})...")
+        # 1. Get positive samples (target digit)
+        mask_pos = (y == target_digit)
+        X_pos, y_pos = X[mask_pos], y[mask_pos]
+        
+        # 2. Get negative samples (all other digits)
+        mask_neg = (y != target_digit)
+        X_neg, y_neg = X[mask_neg], y[mask_neg]
+        
+        # 3. Balance the dataset (50% positive, 50% negative)
+        n_pos = min(len(X_pos), n_samples // 2)
+        n_neg = min(len(X_neg), n_samples - n_pos)
+        
+        if len(X_pos) > n_pos:
+            idx_pos = np.random.choice(len(X_pos), n_pos, replace=False)
+            X_pos, y_pos = X_pos[idx_pos], y_pos[idx_pos]
+            
+        if len(X_neg) > n_neg:
+            idx_neg = np.random.choice(len(X_neg), n_neg, replace=False)
+            X_neg, y_neg = X_neg[idx_neg], y_neg[idx_neg]
+            
+        X = np.concatenate([X_pos, X_neg])
+        y = np.concatenate([y_pos, y_neg])
+        
+        # Shuffle
+        idx_shuffle = np.random.permutation(len(X))
+        X, y = X[idx_shuffle], y[idx_shuffle]
+        
+    else:
+        print(f"Loading MNIST subset (classes {classes[0]} and {classes[1]})...")
+        mask = (y == classes[0]) | (y == classes[1])
+        X = X[mask]
+        y = y[mask]
+        
+        # Limit samples
+        if len(X) > n_samples:
+            indices = np.random.choice(len(X), n_samples, replace=False)
+            X = X[indices]
+            y = y[indices]
     
     # Convert to numpy array if needed
     if hasattr(X, 'values'):
@@ -321,7 +353,7 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         X, y = load_image_directory(source, image_size=target_size, **kwargs)
     
     elif dataset_type == 'mnist':
-        X, y = load_mnist_subset(**kwargs)
+        X, y = load_mnist_subset(target_digit=target_digit, **kwargs)
     
     elif dataset_type == 'array' and X is None:
         X, y = source
