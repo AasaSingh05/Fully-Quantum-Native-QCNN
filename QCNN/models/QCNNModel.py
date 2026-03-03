@@ -47,6 +47,7 @@ class PureQuantumNativeCNN:
         self.quantum_params = self._initialize_quantum_parameters()
 
         # Create pure quantum circuit with high-performance differentiation
+        @qml.transforms.broadcast_expand
         @qml.qnode(self.device, interface='autograd', diff_method='best')
         def quantum_circuit(x, flat_params):
             # Unflatten parameters from flat vector
