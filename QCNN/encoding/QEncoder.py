@@ -60,12 +60,25 @@ class PureQuantumEncoder:
                 data = padded
         
         # Normalize for quantum amplitudes (must sum to 1)
+        eps = 1e-15
         if is_batched:
             norms = pnp.linalg.norm(data, axis=1, keepdims=True)
-            data_norm = data / (norms + 1e-12)
+            # Find indices of all-zero vectors in batch
+            zero_masks = (norms < eps).flatten()
+            if any(zero_masks):
+                # Replace zero vectors with a valid basis state (first element = 1)
+                # to prevent NaN gradients and valid state errors
+                data[zero_masks, 0] = 1.0
+                norms = pnp.linalg.norm(data, axis=1, keepdims=True)
+            data_norm = data / norms
         else:
             norm = pnp.linalg.norm(data)
-            data_norm = data / (norm + 1e-12)
+            if norm < eps:
+                # Replace with first basis state
+                data = pnp.zeros_like(data)
+                data[0] = 1.0
+                norm = 1.0
+            data_norm = data / norm
         
         # Pure quantum encoding - natively supports batched input
         qml.AmplitudeEmbedding(features=data_norm, wires=wires, normalize=True)
@@ -92,10 +105,10 @@ class PureQuantumEncoder:
             x = data[:L]
             
         if x.size > 0:
-            x = pnp.clip(x, -1.0, 1.0)  # preserve sign, bound range
+            x = pnp.clip(x, 0.0, 1.0)  # assume [0, 1] normalized input
 
-        angles_z = pnp.pi * x           # RZ(π x) ∈ [-π, π]
-        angles_y = 0.5 * pnp.pi * x     # RY((π/2) x) ∈ [-π/2, π/2]
+        angles_z = pnp.pi * x           # RZ(π x) ∈ [0, π]
+        angles_y = pnp.pi * x           # RY(π x) ∈ [0, π]
 
         # Layer 1: Individual qubit rotations
         for i in range(L):

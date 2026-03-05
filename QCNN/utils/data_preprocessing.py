@@ -3,7 +3,7 @@ from typing import Tuple, Optional
 
 
 def normalize_to_quantum_range(data: np.ndarray, 
-                               target_range: Tuple[float, float] = (0, 2 * np.pi),
+                               target_range: Tuple[float, float] = (0, 1),
                                method: str = 'minmax') -> np.ndarray:
     """
     Normalize data to quantum-compatible range for angle encoding.

@@ -125,7 +125,7 @@ class QuanvolutionalLayer:
         # Normalize to [0, 2π] if not already
         img_min, img_max = image.min(), image.max()
         if img_max - img_min > 1e-10:
-            image = (image - img_min) / (img_max - img_min) * 2 * np.pi
+            image = (image - img_min) / (img_max - img_min) * np.pi
 
         patches = self.extract_patches(image)
 
@@ -307,7 +307,7 @@ def _quanv_worker_task(args):
     h, w = img.shape
     img_min, img_max = img.min(), img.max()
     if img_max - img_min > 1e-10:
-        img = (img - img_min) / (img_max - img_min) * 2 * np.pi
+        img = (img - img_min) / (img_max - img_min) * np.pi
 
     patches = []
     # Local worker cache for unique patches within THIS image

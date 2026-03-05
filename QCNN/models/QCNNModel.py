@@ -73,23 +73,40 @@ class PureQuantumNativeCNN:
 
         params = {}
 
-        # Convolutional layer: SHARED 2x2 kernel per layer.
-        # Each kernel acts on 4 qubits with shape (4, depth, 2) => [RY, RZ] angles per depth.
-        # depth=2 improves expressivity and accuracy significantly.
+        # ---------------------------------------------------------------------
+        # Xavier/Glorot Initialization for Quantum Parameters
+        # limit = sqrt(6 / (fan_in + fan_out))
+        # ---------------------------------------------------------------------
+
+        # Convolutional layer: acts on 4 qubits, produces 4 active qubits (shared weights)
         conv_depth = 2
         kernel_shape = (4, conv_depth, 2)
+        conv_limit = np.sqrt(6.0 / (4 + 4)) # ~0.866
+        
         for layer in range(self.config.n_conv_layers):
-            kernel_tensor = pnp.array(np.random.normal(0, 0.1, kernel_shape), requires_grad=True)
+            kernel_tensor = pnp.array(
+                np.random.uniform(-conv_limit, conv_limit, kernel_shape), 
+                requires_grad=True
+            )
             params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
 
         # Pooling layer parameters:
-        # We consume 3 angles per (keep, discard) pair in QuantumNativePooling.quantum_unitary_pooling.
+        # fan_in = num_qubits, fan_out = num_qubits/2
         max_pairs = self.num_qubits // 2
         pool_angles = 3 * max_pairs
-        params['quantum_pooling'] = pnp.array(np.random.normal(0, 0.1, pool_angles), requires_grad=True)
+        pool_limit = np.sqrt(6.0 / (self.num_qubits + (self.num_qubits // 2)))
+        params['quantum_pooling'] = pnp.array(
+            np.random.uniform(-pool_limit, pool_limit, pool_angles), 
+            requires_grad=True
+        )
 
-        # Fully connected classifier layer (on up to last 2 active qubits)
-        params['quantum_classifier'] = pnp.array(np.random.normal(0, 0.1, 8), requires_grad=True)
+        # Fully connected classifier layer: 
+        # acts on up to 2 qubits, maps to 1 readout
+        class_limit = np.sqrt(6.0 / (2 + 1)) # ~1.414
+        params['quantum_classifier'] = pnp.array(
+            np.random.uniform(-class_limit, class_limit, 8), 
+            requires_grad=True
+        )
 
         return params
 

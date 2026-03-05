@@ -70,7 +70,15 @@ class QuantumNativeTrainer:
         p = (1.0 + z) * 0.5
         y01 = (pnp.array(labels_pm1) + 1.0) * 0.5
         eps = 1e-7
-        return -pnp.mean(y01 * pnp.log(p + eps) + (1.0 - y01) * pnp.log(1.0 - p + eps))
+        
+        # Use instance weights calculated in train_pure_quantum_cnn
+        pos_w = getattr(self, '_pos_weight', 1.0)
+        neg_w = getattr(self, '_neg_weight', 1.0)
+        
+        loss_pos = y01 * pnp.log(p + eps) * pos_w
+        loss_neg = (1.0 - y01) * pnp.log(1.0 - p + eps) * neg_w
+        
+        return -pnp.mean(loss_pos + loss_neg)
 
     def train_pure_quantum_cnn(self, model: PureQuantumNativeCNN, 
                                X_train: np.ndarray, y_train: np.ndarray,
@@ -152,6 +160,19 @@ class QuantumNativeTrainer:
         # was used during training and internal accuracy computation.
         model._quantum_preprocessed_train = X_train
         model._quantum_preprocessed_test = X_test
+        
+        # Calculate class weights for weighted BCE loss
+        pos_count = np.sum(y_train == 1)
+        neg_count = np.sum(y_train == -1)
+        total = len(y_train)
+        
+        if pos_count > 0 and neg_count > 0:
+            self._pos_weight = total / (2.0 * pos_count)
+            self._neg_weight = total / (2.0 * neg_count)
+            print(f"  Class Weights: +1 (Target): {self._pos_weight:.2f} | -1 (Rest): {self._neg_weight:.2f}")
+        else:
+            self._pos_weight = 1.0
+            self._neg_weight = 1.0
         
         print("Starting Training")
         print("="*50)

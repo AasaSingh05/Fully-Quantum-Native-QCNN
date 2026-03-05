@@ -317,6 +317,22 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         plt.close()
         print(f" ROC curve saved as '{roc_path}'")
         
+        # Save Precision-Recall Curve
+        precision_vals, recall_vals, _ = precision_recall_curve(y_test_bin, prob_scores)
+        pr_auc = auc(recall_vals, precision_vals)
+        pr_path = os.path.join(roc_dir.replace('ROC_Curve', 'Evaluation_Metrics'), 'quantum_pr_curve.png')
+        plt.figure(figsize=(6, 5))
+        plt.plot(recall_vals, precision_vals, color='blue', lw=2, label=f'PR curve (area = {pr_auc:.2f})')
+        plt.xlabel('Recall (Sensitivity)')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall Curve')
+        plt.legend(loc="lower left")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(pr_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f" Precision-Recall curve saved as '{pr_path}'")
+        
         # Save Precision-Recall metrics bar chart
         metrics_dir = os.path.join(graphs_dir, 'Evaluation_Metrics')
         os.makedirs(metrics_dir, exist_ok=True)

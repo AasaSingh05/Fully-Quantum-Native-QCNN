@@ -365,9 +365,38 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     else:
         raise ValueError(f"Unknown dataset type: {dataset_type}")
     
-    print(f"Loaded dataset: {X.shape[0]} samples, {X.shape[1:]} features")
-    print(f"Label distribution: {dict(zip(*np.unique(y, return_counts=True)))}")
-    
+    # 3. Universal balancing for One-vs-Rest
+    if target_digit is not None:
+        print(f"Applying universal balancing for one-vs-rest (target digit {target_digit})...")
+        mask_pos = (y == target_digit)
+        X_pos, y_pos = X[mask_pos], y[mask_pos]
+        mask_neg = (y != target_digit)
+        X_neg, y_neg = X[mask_neg], y[mask_neg]
+        
+        n_pos = len(X_pos)
+        n_neg = len(X_neg)
+        
+        if n_pos > 0 and n_neg > 0:
+            if n_neg > n_pos:
+                # Downsample negative class
+                idx_neg = np.random.choice(n_neg, n_pos, replace=False)
+                X_neg, y_neg = X_neg[idx_neg], y_neg[idx_neg]
+                print(f"  Balanced dataset: {n_pos} positive vs {n_pos} negative samples (downsampled from {n_neg})")
+            elif n_pos > n_neg:
+                # Downsample positive class
+                idx_pos = np.random.choice(n_pos, n_neg, replace=False)
+                X_pos, y_pos = X_pos[idx_pos], y_pos[idx_pos]
+                print(f"  Balanced dataset: {n_neg} positive vs {n_neg} negative samples (downsampled from {n_pos})")
+                
+            X = np.concatenate([X_pos, X_neg])
+            y = np.concatenate([y_pos, y_neg])
+            
+            # Shuffle
+            idx_shuffle = np.random.permutation(len(X))
+            X, y = X[idx_shuffle], y[idx_shuffle]
+        else:
+            print(f"  Warning: Could not balance dataset. Positive samples: {n_pos}, Negative samples: {n_neg}")
+
     # Preprocess for quantum circuit
     X_processed, y_processed = preprocess_for_quantum(
         X, y, n_qubits=n_qubits, image_size=image_size, normalization=normalization,
