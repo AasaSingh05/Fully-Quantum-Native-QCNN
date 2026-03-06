@@ -240,8 +240,17 @@ class QuantumNativeTrainer:
             model.quantum_params = model._unflatten_params(params_flat)
             
             # Compute accuracies; limit train accuracy sample size for speed
-            train_accuracy = self._compute_quantum_accuracy(model, X_train[:200], y_train[:200])
-            test_accuracy = self._compute_quantum_accuracy(model, X_test, y_test)
+            train_preds = model.quantum_predict_batch(X_train[:200])
+            train_accuracy = np.mean(train_preds == y_train[:200])
+            
+            test_preds = model.quantum_predict_batch(X_test)
+            test_accuracy = np.mean(test_preds == y_test)
+            
+            # Confusion matrix for diagnostics
+            tp = np.sum((test_preds == 1) & (y_test == 1))
+            tn = np.sum((test_preds == -1) & (y_test == -1))
+            fp = np.sum((test_preds == 1) & (y_test == -1))
+            fn = np.sum((test_preds == -1) & (y_test == 1))
             
             model.training_history['loss'].append(float(avg_loss))
             model.training_history['accuracy'].append(float(test_accuracy))
@@ -259,6 +268,7 @@ class QuantumNativeTrainer:
                 f"Loss: {avg_loss:.4f} | "
                 f"Train Acc: {train_accuracy:.1%} | "
                 f"Test Acc: {test_accuracy:.1%} | "
+                f"CM: [TP:{tp}, TN:{tn}, FP:{fp}, FN:{fn}] | "
                 f"Progress: {progress_percent:.1f}% | "
                 f"ETA: {remaining:.1f}s ---"
             )

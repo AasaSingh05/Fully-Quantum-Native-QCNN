@@ -85,7 +85,7 @@ class PureQuantumNativeCNN:
         
         for layer in range(self.config.n_conv_layers):
             kernel_tensor = pnp.array(
-                np.random.uniform(-conv_limit, conv_limit, kernel_shape), 
+                np.random.uniform(-0.1, 0.1, kernel_shape), 
                 requires_grad=True
             )
             params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
@@ -96,7 +96,7 @@ class PureQuantumNativeCNN:
         pool_angles = 3 * max_pairs
         pool_limit = np.sqrt(6.0 / (self.num_qubits + (self.num_qubits // 2)))
         params['quantum_pooling'] = pnp.array(
-            np.random.uniform(-pool_limit, pool_limit, pool_angles), 
+            np.random.uniform(-0.1, 0.1, pool_angles), 
             requires_grad=True
         )
 
@@ -104,7 +104,7 @@ class PureQuantumNativeCNN:
         # acts on up to 2 qubits, maps to 1 readout
         class_limit = np.sqrt(6.0 / (2 + 1)) # ~1.414
         params['quantum_classifier'] = pnp.array(
-            np.random.uniform(-class_limit, class_limit, 8), 
+            np.random.uniform(-0.1, 0.1, 8), 
             requires_grad=True
         )
 

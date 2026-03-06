@@ -377,17 +377,18 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         n_neg = len(X_neg)
         
         if n_pos > 0 and n_neg > 0:
-            if n_neg > n_pos:
-                # Downsample negative class
-                idx_neg = np.random.choice(n_neg, n_pos, replace=False)
-                X_neg, y_neg = X_neg[idx_neg], y_neg[idx_neg]
-                print(f"  Balanced dataset: {n_pos} positive vs {n_pos} negative samples (downsampled from {n_neg})")
-            elif n_pos > n_neg:
-                # Downsample positive class
-                idx_pos = np.random.choice(n_pos, n_neg, replace=False)
-                X_pos, y_pos = X_pos[idx_pos], y_pos[idx_pos]
-                print(f"  Balanced dataset: {n_neg} positive vs {n_neg} negative samples (downsampled from {n_pos})")
-                
+            n_target = min(n_pos, n_neg)
+            
+            # Subsample positive
+            idx_pos = np.random.choice(n_pos, n_target, replace=False)
+            X_pos, y_pos = X_pos[idx_pos], y_pos[idx_pos]
+            
+            # Subsample negative
+            idx_neg = np.random.choice(n_neg, n_target, replace=False)
+            X_neg, y_neg = X_neg[idx_neg], y_neg[idx_neg]
+            
+            print(f"  [Balancer] Balanced to {n_target} samples per class (Total: {2*n_target})")
+            
             X = np.concatenate([X_pos, X_neg])
             y = np.concatenate([y_pos, y_neg])
             

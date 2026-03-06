@@ -145,14 +145,34 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     # NEW: Limit total dataset size if requested, BEFORE splitting and expensive preprocessing.
     # This ensuring both train and test sets are small enough for quantum simulation.
     if train_sample_size is not None and len(X_quantum) > train_sample_size:
-        # We take a slightly larger pool so that after 70/30 split, 
-        # the training set is exactly train_sample_size.
+        # Step 2.1: Limit total dataset size with Stratified Sampling for balance
         total_needed = int(train_sample_size / 0.7)
         if total_needed < len(X_quantum):
-            print(f"  Limiting total dataset to {total_needed} samples for efficiency (target train: {train_sample_size})...")
-            indices = np.random.choice(len(X_quantum), total_needed, replace=False)
+            print(f"  Limiting total dataset to {total_needed} samples with stratified sampling...")
+            
+            # Find indices for each class
+            idx_pos = np.where(y_quantum == 1)[0]
+            idx_neg = np.where(y_quantum == -1)[0]
+            
+            # Calculate samples per class (targeted 50/50)
+            n_pos_needed = total_needed // 2
+            n_neg_needed = total_needed - n_pos_needed
+            
+            # Ensure we have enough samples of each
+            n_pos_actual = min(len(idx_pos), n_pos_needed)
+            n_neg_actual = min(len(idx_neg), n_neg_needed)
+            
+            # Draw random samples from each class
+            sampled_pos = np.random.choice(idx_pos, n_pos_actual, replace=False)
+            sampled_neg = np.random.choice(idx_neg, n_neg_actual, replace=False)
+            
+            # Combine and shuffle
+            indices = np.concatenate([sampled_pos, sampled_neg])
+            np.random.shuffle(indices)
+            
             X_quantum = X_quantum[indices]
             y_quantum = y_quantum[indices]
+            print(f"  Sampled dataset: {n_pos_actual} pos, {n_neg_actual} neg")
 
     # Ensure all data (including synthetic) is preprocessed for the model if not already
     from QCNN.utils.data_preprocessing import preprocess_for_quantum
