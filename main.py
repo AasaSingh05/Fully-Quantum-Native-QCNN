@@ -373,16 +373,30 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         plt.close()
         print(f" Evaluation metrics chart saved as '{metrics_path}'")
         
-        # Extract computation times per epoch from the training loops if available
-        # But we don't have per-epoch time saved in history. We can at least make a chart of time.
-        # Let's save a bar chart showing the total computation time breakdown.
+        # Per-epoch computation time breakdown
         time_dir = os.path.join(graphs_dir, 'Computation_Time')
         os.makedirs(time_dir, exist_ok=True)
         time_path = os.path.join(time_dir, 'quantum_computation_time.png')
-        plt.figure(figsize=(6, 5))
-        plt.bar(['Total Training Time'], [training_time], color='dodgerblue')
-        plt.text(0, training_time + (training_time*0.02), f'{training_time:.1f}s', ha='center', va='bottom')
-        plt.title('Quantum Computation Time')
+        
+        plt.figure(figsize=(10, 6))
+        epoch_times = trained_model.training_history.get('epoch_times', [])
+        if epoch_times:
+            epochs = list(range(1, len(epoch_times) + 1))
+            bars = plt.bar(epochs, epoch_times, color='dodgerblue')
+            # Add value labels on top of bars
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width() / 2, height + (max(epoch_times)*0.01), 
+                         f'{height:.1f}s', ha='center', va='bottom', fontsize=8)
+            
+            plt.xlabel('Epoch')
+            plt.xticks(epochs)
+            plt.title(f'Quantum Computation Time per Epoch (Total: {training_time:.1f}s)')
+        else:
+            plt.bar(['Total Training Time'], [training_time], color='dodgerblue')
+            plt.text(0, training_time + (training_time*0.02), f'{training_time:.1f}s', ha='center', va='bottom')
+            plt.title('Quantum Computation Time')
+            
         plt.ylabel('Seconds')
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.tight_layout()

@@ -30,48 +30,47 @@ class QuantumNativeConvolution:
         params_arr = pnp.asarray(params)
 
         # Backward-compat handling and shape normalization:
-        # Normalize input to shape (4, depth, 2) with last dim [RY, RZ]
+        # Normalize input to shape (4, depth, 3) with last dim [RX, RY, RZ]
         if params_arr.ndim == 1:
-            # Flat vector -> must be at least 8 entries (4 qubits * [RY,RZ])
-            if params_arr.size < 8:
-                raise ValueError("Flat params must have at least 8 values (4 qubits * [RY,RZ]).")
-            params_arr = params_arr[:8].reshape(4, 1, 2)
+            # Flat vector -> [4 qubits * depth * 3]
+            depth = params_arr.size // 12
+            if depth == 0:
+                raise ValueError("Flat params too short for SU(2) kernel.")
+            params_arr = params_arr[:depth*12].reshape(4, depth, 3)
         elif params_arr.ndim == 2:
-            # Allow (4, 2) -> interpret as single depth with [RY,RZ] per qubit
-            if params_arr.shape == (4, 2):
-                params_arr = params_arr.reshape(4, 1, 2)
+            # (4, 3) -> interpret as depth 1
+            if params_arr.shape == (4, 3):
+                params_arr = params_arr.reshape(4, 1, 3)
             else:
-                raise ValueError("2D params must be shape (4,2) = [RY,RZ] per qubit.")
+                raise ValueError("2D params must be shape (4,3) for SU(2).")
         elif params_arr.ndim == 3:
-            if params_arr.shape[0] != 4 or params_arr.shape[2] != 2:
-                raise ValueError("3D params must be (4, depth, 2) with last dim [RY,RZ].")
+            if params_arr.shape[0] != 4 or params_arr.shape[2] != 3:
+                raise ValueError("3D params must be (4, depth, 3) for SU(2).")
         else:
-            raise ValueError("Unsupported params shape; use (4, depth, 2) or flat length >= 8.")
+            raise ValueError("Unsupported params shape; use (4, depth, 3).")
 
         depth = params_arr.shape[1]
 
         # Single-qubit rotations per depth slice
         for d in range(depth):
             for i, q in enumerate(qubits):
-                theta_ry = params_arr[i, d, 0]
-                theta_rz = params_arr[i, d, 1]
-                qml.RY(theta_ry, wires=q)
-                qml.RZ(theta_rz, wires=q)
+                qml.RX(params_arr[i, d, 0], wires=q)
+                qml.RY(params_arr[i, d, 1], wires=q)
+                qml.RZ(params_arr[i, d, 2], wires=q)
 
-            # Local entanglement inside the 2x2 window.
-            # Window layout indices:
-            # [ q0 q1
-            #   q2 q3 ]
+            # All-to-all entanglement inside the 2x2 window.
+            # Window layout: [ q0 q1, q2 q3 ]
             q0, q1, q2, q3 = qubits
 
-            # Horizontal edges
+            # Horizontal
             qml.CNOT(wires=[q0, q1])
             qml.CNOT(wires=[q2, q3])
-            # Vertical edges
+            # Vertical
             qml.CNOT(wires=[q0, q2])
             qml.CNOT(wires=[q1, q3])
-            # Optional diagonal to mix but remain shallow
+            # Diagonals (all-to-all)
             qml.CNOT(wires=[q0, q3])
+            qml.CNOT(wires=[q1, q2])
 
         # No data-dependent rescaling; stability and weight sharing come from reusing the same 'params'
         # for every 2x2 window within a given convolutional layer.
@@ -82,7 +81,7 @@ class QuantumNativeConvolution:
         Returns the number of trainable parameters for a single 2×2 quantum kernel.
         
         For a window of 4 qubits:
-            RY and RZ per qubit per depth → 4 * depth * 2.
+            RX, RY and RZ per qubit per depth → 4 * depth * 3.
 
         Args:
             num_qubits: number of qubits in window (must be 4)
@@ -93,7 +92,7 @@ class QuantumNativeConvolution:
         """
         if num_qubits != 4:
             raise ValueError("This kernel is defined for a 2x2 window (4 qubits).")
-        return 4 * depth * 2
+        return 4 * depth * 3
 
     @staticmethod
     def get_conv_windows(width: int, height: int = None) -> list[list[int]]:

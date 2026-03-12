@@ -184,6 +184,12 @@ class QuantumNativeTrainer:
         params_flat = model._flatten_params(model.quantum_params)
         n_epochs = model.config.n_epochs
         
+        # Stability parameters
+        patience_counter = 0
+        patience = getattr(model.config, 'early_stopping_patience', 3)
+        lr_factor = getattr(model.config, 'lr_plateau_factor', 0.5)
+        current_lr = model.config.learning_rate
+
         for epoch in range(n_epochs):
             epoch_start = time.time()
             
@@ -213,28 +219,29 @@ class QuantumNativeTrainer:
                 # Manually compute gradients for clipping support
                 grad, loss_val = self.quantum_optimizer.compute_grad(quantum_cost, (params_flat,), {})
                 
-                # Gradient clipping to prevent NaNs
+                # Gradient clipping to prevent NaNs (softened for deeper model)
                 grad_norm = pnp.linalg.norm(grad[0])
-                if grad_norm > 1.0:
-                    grad = (grad[0] * (1.0 / grad_norm),)
+                if grad_norm > 5.0:
+                    grad = (grad[0] * (5.0 / grad_norm),)
                 
                 params_flat = self.quantum_optimizer.apply_grad(grad, (params_flat,))[0]
                 
                 # Safe logging of real values
-                # Batch loss is computed; stats will be printed after circuit execution
                 epoch_quantum_loss += float(loss_val)
                 n_quantum_batches += 1
 
                 X_processed = model._preprocess_input(X_quantum_batch)
                 
-                quantum_outputs = pnp.atleast_1d(model.quantum_circuit(X_processed, params_flat))
-                
-                # Print diagnostic info (captured by Logger)
-                print(
-                    f"Epoch {epoch+1} Batch {i//model.config.batch_size+1} | "
-                    f"Loss: {float(loss_val):.6f} | "
-                    f"Stats: min: {quantum_outputs.min():.3f}, max: {quantum_outputs.max():.3f}, mean: {quantum_outputs.mean():.3f}"
-                )
+                # Diagnostic check (optional if speed is priority, but good for logs)
+                if i == 0: # Only check first batch for stats to save time
+                    quantum_outputs = pnp.atleast_1d(model.quantum_circuit(X_processed, params_flat))
+                    print(
+                        f"Epoch {epoch+1} Batch {i//model.config.batch_size+1} | "
+                        f"Loss: {float(loss_val):.6f} | "
+                        f"Stats: min: {quantum_outputs.min():.3f}, max: {quantum_outputs.max():.3f}, mean: {quantum_outputs.mean():.3f}"
+                    )
+                else:
+                    print(f"Epoch {epoch+1} Batch {i//model.config.batch_size+1} | Loss: {float(loss_val):.6f}")
             
             avg_loss = epoch_quantum_loss / max(1, n_quantum_batches)
             model.quantum_params = model._unflatten_params(params_flat)
@@ -255,12 +262,28 @@ class QuantumNativeTrainer:
             model.training_history['loss'].append(float(avg_loss))
             model.training_history['accuracy'].append(float(test_accuracy))
             
+            elapsed = time.time() - epoch_start
+            model.training_history['epoch_times'].append(float(elapsed))
+            
+            # Best Model Restoration & Stability Logic
             if test_accuracy > best_accuracy:
+                print(f"  [STABILITY] Test accuracy improved: {best_accuracy:.2%} -> {test_accuracy:.2%}. Saving best params.")
                 best_accuracy = test_accuracy
                 best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    if current_lr > 1e-4:
+                        current_lr *= lr_factor
+                        self.quantum_optimizer.stepsize = current_lr
+                        print(f"  [STABILITY] Plateau detected. Reducing Learning Rate to {current_lr:.6f}")
+                        patience_counter = 0 # reset once per LR drop to allow recovery
+                    else:
+                        print(f"  [STABILITY] Early Stopping triggered after {epoch+1} epochs due to lack of improvement.")
+                        break
             
             progress_percent = ((epoch + 1) / n_epochs) * 100
-            elapsed = time.time() - epoch_start
             estimated_total = elapsed / ((epoch + 1) / n_epochs)
             remaining = estimated_total - elapsed
             epoch_summary_text = (

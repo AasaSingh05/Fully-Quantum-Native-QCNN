@@ -57,14 +57,14 @@ class PureQuantumNativeCNN:
         self.quantum_circuit = quantum_circuit
 
         # Training metrics
-        self.training_history = {'loss': [], 'accuracy': []}
+        self.training_history = {'loss': [], 'accuracy': [], 'epoch_times': []}
 
     def _initialize_quantum_parameters(self) -> dict[str, pnp.ndarray]:
         """
         Allocate and initialize all trainable quantum parameters:
-        - Shared 2×2 convolution kernels per layer
-        - Unitary pooling parameters
-        - Final shallow classifier head
+        - Shared 2×2 convolution kernels per layer (depth=3)
+        - Per-layer unitary pooling parameters
+        - Deep variational classifier head
 
         Returns:
             dict mapping parameter names to PennyLane arrays.
@@ -72,39 +72,32 @@ class PureQuantumNativeCNN:
         pnp.random.seed(42)
 
         params = {}
+        init_range = np.pi / 4  # Wider init for better quantum landscape exploration
 
-        # ---------------------------------------------------------------------
-        # Xavier/Glorot Initialization for Quantum Parameters
-        # limit = sqrt(6 / (fan_in + fan_out))
-        # ---------------------------------------------------------------------
-
-        # Convolutional layer: acts on 4 qubits, produces 4 active qubits (shared weights)
-        conv_depth = 2
-        kernel_shape = (4, conv_depth, 2)
-        conv_limit = np.sqrt(6.0 / (4 + 4)) # ~0.866
+        # Convolutional kernels: depth=4 and SU(2) (3 params/qubit) for max expressivity
+        conv_depth = 4
+        kernel_shape = (4, conv_depth, 3)
         
         for layer in range(self.config.n_conv_layers):
             kernel_tensor = pnp.array(
-                np.random.uniform(-0.1, 0.1, kernel_shape), 
+                np.random.uniform(-init_range, init_range, kernel_shape), 
                 requires_grad=True
             )
             params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
 
-        # Pooling layer parameters:
-        # fan_in = num_qubits, fan_out = num_qubits/2
+        # Per-layer pooling parameters (each pooling stage gets its own weights)
         max_pairs = self.num_qubits // 2
-        pool_angles = 3 * max_pairs
-        pool_limit = np.sqrt(6.0 / (self.num_qubits + (self.num_qubits // 2)))
-        params['quantum_pooling'] = pnp.array(
-            np.random.uniform(-0.1, 0.1, pool_angles), 
-            requires_grad=True
-        )
+        pool_angles_per_layer = 3 * max_pairs
+        n_pool_layers = max(1, self.config.n_conv_layers - 1)
+        for pl in range(n_pool_layers):
+            params[f'quantum_pooling_{pl}'] = pnp.array(
+                np.random.uniform(-init_range, init_range, pool_angles_per_layer), 
+                requires_grad=True
+            )
 
-        # Fully connected classifier layer: 
-        # acts on up to 2 qubits, maps to 1 readout
-        class_limit = np.sqrt(6.0 / (2 + 1)) # ~1.414
+        # Deeper variational classifier head (32 params)
         params['quantum_classifier'] = pnp.array(
-            np.random.uniform(-0.1, 0.1, 8), 
+            np.random.uniform(-init_range, init_range, 32), 
             requires_grad=True
         )
 
@@ -135,24 +128,26 @@ class PureQuantumNativeCNN:
         params = {}
         idx = 0
 
-        # Convs: each layer kernel is (4, depth, 2)
-        conv_depth = 2
-        kernel_size = 4 * conv_depth * 2
+        # Convs: each layer kernel is (4, depth, 3) with depth=4
+        conv_depth = 4
+        kernel_size = 4 * conv_depth * 3
         for layer in range(self.config.n_conv_layers):
             size = kernel_size
             slice_flat = flat_params[idx:idx + size]
-            params[f'quantum_conv_kernel_{layer}'] = slice_flat.reshape(4, conv_depth, 2)
+            params[f'quantum_conv_kernel_{layer}'] = slice_flat.reshape(4, conv_depth, 3)
             idx += size
 
-        # Pooling params: fixed length allocated above
+        # Per-layer pooling params
         max_pairs = self.num_qubits // 2
-        pool_angles = 3 * max_pairs
-        params['quantum_pooling'] = flat_params[idx:idx + pool_angles]
-        idx += pool_angles
+        pool_angles_per_layer = 3 * max_pairs
+        n_pool_layers = max(1, self.config.n_conv_layers - 1)
+        for pl in range(n_pool_layers):
+            params[f'quantum_pooling_{pl}'] = flat_params[idx:idx + pool_angles_per_layer]
+            idx += pool_angles_per_layer
 
-        # Classifier: fixed length 8
-        params['quantum_classifier'] = flat_params[idx:idx + 8]
-        idx += 8
+        # Classifier: 32 params
+        params['quantum_classifier'] = flat_params[idx:idx + 32]
+        idx += 32
 
         return params
 
@@ -211,7 +206,7 @@ class PureQuantumNativeCNN:
                         window_qubits = [active_qubits[i] for i in rel_window]
                         QuantumNativeConvolution.quantum_conv2d_kernel(kernel, window_qubits)
 
-            # Quantum pooling between layers (except last)
+            # Quantum pooling between layers (except last) — per-layer params
             if layer < self.config.n_conv_layers - 1:
                 n_qubits_current = len(active_qubits)
                 if n_qubits_current < 2:
@@ -225,8 +220,10 @@ class PureQuantumNativeCNN:
                 keep = [k for (k, _) in pairs]
                 discard = [d for (_, d) in pairs]
 
+                # Use per-layer pooling weights for specialization
+                pool_key = f'quantum_pooling_{layer}'
                 QuantumNativePooling.quantum_unitary_pooling(
-                    params['quantum_pooling'],
+                    params[pool_key],
                     input_qubits=keep,
                     output_qubits=discard
                 )
@@ -238,24 +235,35 @@ class PureQuantumNativeCNN:
                 if current_image_size > 2:
                     current_image_size = max(2, current_image_size // 2)
 
-        # Step 3: Final quantum classification
+        # Step 3: Deep variational classifier (32 params)
         classifier_params = params['quantum_classifier']
+        n_active = len(active_qubits)
+        readout = active_qubits[0]
 
-        # Apply RY on up to the first two active qubits
-        for i, q in enumerate(active_qubits[:2]):
-            angle = classifier_params[i % len(classifier_params)]
-            qml.RY(angle, wires=q)
+        # Layer 1: RX + RY + RZ on all active qubits
+        for i, q in enumerate(active_qubits[:min(n_active, 4)]):
+            qml.RX(classifier_params[i * 2 % 32], wires=q)
+            qml.RY(classifier_params[(i * 2 + 1) % 32], wires=q)
+            qml.RZ(classifier_params[(i * 2 + 8) % 32], wires=q)
 
-        # Light entanglement if possible
-        if len(active_qubits) >= 2:
-            qml.CNOT(wires=[active_qubits[0], active_qubits[1]])
+        # Entanglement (Cascade)
+        for i in range(n_active - 1):
+            qml.CNOT(wires=[active_qubits[i], active_qubits[i+1]])
+        if n_active >= 2:
+            qml.CNOT(wires=[active_qubits[n_active-1], active_qubits[0]]) # Ring
 
-        # Final tweak on readout
-        if len(active_qubits) >= 1:
-            qml.RZ(classifier_params[-1], wires=active_qubits[0])
+        # Layer 2: Second SU(2) rotation layer
+        for i, q in enumerate(active_qubits[:min(n_active, 4)]):
+            qml.RX(classifier_params[(i * 2 + 16) % 32], wires=q)
+            qml.RY(classifier_params[(i * 2 + 17) % 32], wires=q)
+
+        # Final entanglement + readout focus
+        if n_active >= 2:
+            qml.CNOT(wires=[active_qubits[0], active_qubits[min(n_active-1, 1)]])
+        qml.RZ(classifier_params[31], wires=readout)
 
         # Measurement
-        return qml.expval(qml.PauliZ(active_qubits[0]))
+        return qml.expval(qml.PauliZ(readout))
 
     def _preprocess_input(self, x: np.ndarray) -> np.ndarray:
         """
@@ -316,7 +324,7 @@ class PureQuantumNativeCNN:
 
     def quantum_predict_single(self, x: np.ndarray) -> float:
         """
-        Predict ⟨Z⟩ for a single sample using the pure quantum circuit.
+         Predict ⟨Z⟩ for a single sample using the pure quantum circuit.
 
         Args:
             x: input sample (any size, will be preprocessed)

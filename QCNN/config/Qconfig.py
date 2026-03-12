@@ -48,8 +48,10 @@ class QuantumNativeConfig:
         
         # Quantum training parameters
         self.learning_rate = 0.01
-        self.n_epochs = 20
+        self.n_epochs = 50
         self.batch_size = 16
+        self.early_stopping_patience = 3  # Stop if no improvement after N epochs
+        self.lr_plateau_factor = 0.5      # Multiply LR by this factor on plateau
         
         # Quantum device
         self.device = 'lightning.qubit'  
