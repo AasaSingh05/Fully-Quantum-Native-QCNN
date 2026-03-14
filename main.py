@@ -271,6 +271,15 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     print(f"\n Quantum Confusion Matrix:")
     print(f"   True Positives: {tp}")
     print(f"   True Negatives: {tn}")
+    # Calculate continuous probabilities for Bias, Variance, ROC, and PR curves
+    raw_outputs = []
+    for xi in X_eval:
+         out = trained_model.quantum_circuit(trained_model._preprocess_input(np.array([xi])), trained_model._flatten_params(trained_model.quantum_params))
+         raw_outputs.append(float(np.squeeze(out)))
+    raw_outputs = np.array(raw_outputs)
+    # Normalize continuous outputs to [0, 1] for metrics and curves
+    prob_scores = (raw_outputs - raw_outputs.min()) / (raw_outputs.max() - raw_outputs.min() + 1e-8)
+
     # Evaluation Metrics
     # Map predictions from [-1, 1] to [0, 1] for sklearn metrics
     y_test_bin = np.where(y_test == 1, 1, 0)
@@ -280,10 +289,16 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     recall = recall_score(y_test_bin, preds_bin, zero_division=0)
     f1 = f1_score(y_test_bin, preds_bin, zero_division=0)
     
+    # Calculate Prediction Bias and Variance
+    prediction_bias = np.mean(prob_scores) - np.mean(y_test_bin)
+    prediction_variance = np.var(prob_scores)
+
     print(f"\n Evaluation Metrics:")
     print(f"   Sensitivity (Recall): {recall:.3f}")
     print(f"   Precision: {precision:.3f}")
     print(f"   F1 Score: {f1:.3f}")
+    print(f"   Prediction Bias: {prediction_bias:.4f}")
+    print(f"   Prediction Variance: {prediction_variance:.4f}")
 
     # Plot training history and save graphs
     try:
@@ -305,17 +320,6 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         print(f"\n Confusion matrix saved as '{cm_path}'")
         
         # Save ROC Curve
-        # We need continuous probabilities for ROC. Since QCNN outputs values around [-1, 1],
-        # we can scale them to [0, 1] to approximate probabilities.
-        raw_outputs = []
-        for xi in X_eval:
-             # Quick approximation: run circuit directly to get continuous value
-             out = trained_model.quantum_circuit(trained_model._preprocess_input(np.array([xi])), trained_model._flatten_params(trained_model.quantum_params))
-             raw_outputs.append(float(np.squeeze(out)))
-        raw_outputs = np.array(raw_outputs)
-        # Normalize continuous outputs to [0, 1] for roc_curve
-        prob_scores = (raw_outputs - raw_outputs.min()) / (raw_outputs.max() - raw_outputs.min() + 1e-8)
-        
         fpr, tpr, _ = roc_curve(y_test_bin, prob_scores)
         roc_auc = auc(fpr, tpr)
         
@@ -357,14 +361,19 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         metrics_dir = os.path.join(graphs_dir, 'Evaluation_Metrics')
         os.makedirs(metrics_dir, exist_ok=True)
         metrics_path = os.path.join(metrics_dir, 'quantum_evaluation_metrics.png')
-        plt.figure(figsize=(6, 5))
-        metric_names = ['Sensitivity', 'Precision', 'F1 Score']
-        metric_vals = [recall, precision, f1]
-        bars = plt.bar(metric_names, metric_vals, color='royalblue')
+        plt.figure(figsize=(8, 5))
+        metric_names = ['Sensitivity', 'Precision', 'F1 Score', 'Pred Bias', 'Pred Var']
+        metric_vals = [recall, precision, f1, prediction_bias, prediction_variance]
+        bars = plt.bar(metric_names, metric_vals, color=['royalblue', 'royalblue', 'royalblue', 'coral', 'mediumseagreen'])
         for bar in bars:
             yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.01, f'{yval:.2f}', ha='center', va='bottom')
-        plt.ylim([0, 1.1])
+            offset = 0.02 if yval >= 0 else -0.05
+            va = 'bottom' if yval >= 0 else 'top'
+            plt.text(bar.get_x() + bar.get_width()/2, yval + offset, f'{yval:.3f}', ha='center', va=va)
+        
+        min_val = min(0, min(metric_vals))
+        max_val = max(1.1, max(metric_vals))
+        plt.ylim([min_val - 0.1, max_val + 0.1])
         plt.title('Model Performance Metrics')
         plt.ylabel('Score')
         plt.grid(axis='y', linestyle='--', alpha=0.7)
