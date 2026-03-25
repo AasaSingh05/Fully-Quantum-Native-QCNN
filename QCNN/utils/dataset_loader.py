@@ -3,7 +3,7 @@ import os
 from typing import Tuple, Optional, Union
 import struct
 from pathlib import Path
-from .data_preprocessing import preprocess_for_quantum, encode_labels_ovr
+from .data_preprocessing import preprocess_for_quantum
 
 
 def load_npz_dataset(filepath: str) -> Tuple[np.ndarray, np.ndarray]:

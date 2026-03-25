@@ -86,7 +86,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     print("\nStep 1: Initializing Quantum Configuration...")
     # Use factory to auto-configure based on image size and desired encoding
     if image_size is None:
-        image_size = 4 if dataset_type == 'synthetic' else 28 # Default for MNIST/others
+        image_size = 4 if dataset_type == 'synthetic' else 16 # Default 16 for MNIST to enable amplitude encoding
     
     config = QuantumNativeConfig.from_image_size(image_size, encoding)
     if learning_rate is not None:

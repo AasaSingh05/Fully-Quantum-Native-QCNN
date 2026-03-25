@@ -14,8 +14,8 @@ class QuantumNativeConfig:
     
     def __init__(self):
         # Data parameters
-        self.image_size = 4  # 4x4 = 16 features
-        self.n_qubits = self.image_size ** 2  # Default: 1 qubit per pixel
+        self.image_size = 16  # 16x16 = 256 features
+        self.n_qubits = 8  # log2(256) = 8 qubits for amplitude encoding
         
         # Dataset parameters
         self.n_classes = 2  # Binary classification (one-vs-rest)
@@ -32,7 +32,7 @@ class QuantumNativeConfig:
         #   feature_map  – 1 qubit per feature (original, image_size² qubits)
         #   amplitude    – log₂(features) qubits via amplitude embedding
         #   patch        – quanvolutional preprocessing then QCNN on reduced map
-        self.encoding_type = 'feature_map'  # More stable default than amplitude
+        self.encoding_type = 'amplitude'  # Captures full image details efficiently
         
         # Pure quantum architecture parameters  
         self.n_conv_layers = 4
@@ -45,10 +45,10 @@ class QuantumNativeConfig:
         self.quanv_qubits = 16     # Qubits used per patch circuit (patch_size²)
         
         # Quantum training parameters
-        self.learning_rate = 0.01
+        self.learning_rate = 0.05
         self.n_epochs = 50
-        self.batch_size = 16
-        self.early_stopping_patience = 3  # Stop if no improvement after N epochs
+        self.batch_size = 32
+        self.early_stopping_patience = 5  # Stop if no improvement after N epochs
         self.lr_plateau_factor = 0.5      # Multiply LR by this factor on plateau
         
         # Quantum device

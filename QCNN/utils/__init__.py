@@ -4,7 +4,6 @@ from .data_preprocessing import (
     normalize_to_quantum_range,
     preprocess_for_quantum,
     encode_labels,
-    encode_labels_ovr,
     resize_images,
     flatten_and_pad
 )
@@ -17,7 +16,6 @@ __all__ = [
     'normalize_to_quantum_range',
     'preprocess_for_quantum',
     'encode_labels',
-    'encode_labels_ovr',
     'resize_images',
     'flatten_and_pad',
     'save_metadata'

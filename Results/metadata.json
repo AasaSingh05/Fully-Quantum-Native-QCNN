@@ -1,12 +1,15 @@
 {
     "config": {
-        "image_size": 28,
+        "image_size": 32,
         "n_qubits": 8,
         "n_classes": 2,
-        "n_features": 196,
+        "n_features": 256,
         "preprocessing_mode": "minmax",
-        "target_digit": 0,
-        "binary_mode": "one_vs_rest",
+        "classes": [
+            0,
+            1
+        ],
+        "binary_mode": "strict_binary",
         "encoding_type": "patch",
         "n_conv_layers": 4,
         "kernel_size": 2,
@@ -16,8 +19,8 @@
         "quanv_qubits": 16,
         "learning_rate": 0.005,
         "n_epochs": 50,
-        "batch_size": 16,
-        "early_stopping_patience": 3,
+        "batch_size": 32,
+        "early_stopping_patience": 5,
         "lr_plateau_factor": 0.5,
         "device": "lightning.qubit",
         "shots": null
