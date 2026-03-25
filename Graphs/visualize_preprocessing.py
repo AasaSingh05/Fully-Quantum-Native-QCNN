@@ -5,18 +5,18 @@ from QCNN.utils.dataset_loader import load_mnist_subset
 from QCNN.utils.data_preprocessing import preprocess_for_quantum
 
 # Configuration
-target_digit = 0
+classes = (0, 1)
 image_size = 4
 n_qubits = 16
 encoding_type = 'feature_map'
 
 print("Loading raw MNIST...")
 # 1. Load raw MNIST (before preprocessing)
-X_raw, y_raw = load_mnist_subset(n_samples=10, target_digit=target_digit, flatten=False)
+X_raw, y_raw = load_mnist_subset(n_samples=10, classes=classes, flatten=False)
 
-# Get one positive (target) and one negative (non-target) sample
-idx_pos = np.where(y_raw == target_digit)[0][0]
-idx_neg = np.where(y_raw != target_digit)[0][0]
+# Get one sample from each class
+idx_pos = np.where(y_raw == classes[1])[0][0]
+idx_neg = np.where(y_raw == classes[0])[0][0]
 
 X_pos_raw = X_raw[idx_pos]
 X_neg_raw = X_raw[idx_neg]
@@ -33,8 +33,7 @@ X_processed, y_processed = preprocess_for_quantum(
     n_qubits=n_qubits,
     image_size=image_size,
     normalization='minmax',
-    encoding_type=encoding_type,
-    target_digit=target_digit
+    encoding_type=encoding_type
 )
 
 X_pos_processed = X_processed[idx_pos].reshape(image_size, image_size)
@@ -58,8 +57,8 @@ def save_image(img, title, filename):
     plt.close()
     print(f"Saved {filename}")
 
-save_image(X_pos_raw, f'Raw: Class {target_digit} (Target)', 'Results/Preprocessing_Images/raw_target.png')
-save_image(X_neg_raw, f'Raw: Class {y_raw[idx_neg]} (Non-Target)', 'Results/Preprocessing_Images/raw_nontarget.png')
+save_image(X_pos_raw, f'Raw: Class {classes[1]} (+1)', 'Results/Preprocessing_Images/raw_target.png')
+save_image(X_neg_raw, f'Raw: Class {classes[0]} (-1)', 'Results/Preprocessing_Images/raw_nontarget.png')
 
 save_image(X_pos_processed_vis, f'Processed: Label {y_processed[idx_pos]}', 'Results/Preprocessing_Images/processed_target.png')
 save_image(X_neg_processed_vis, f'Processed: Label {y_processed[idx_neg]}', 'Results/Preprocessing_Images/processed_nontarget.png')

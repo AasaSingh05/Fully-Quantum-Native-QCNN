@@ -384,13 +384,8 @@ class QuantumNativeTrainer:
                   f"Got [{X.min():.3f}, {X.max():.3f}]")
         
         unique_labels = np.unique(y)
-        if getattr(model.config, 'target_digit', None) is None:
-            # Legacy binary mode: requires exactly {-1, 1}
-            if not np.array_equal(unique_labels, np.array([-1, 1])):
-                raise ValueError(
-                    f"Labels must be {{-1, +1}} for binary classification. Got {unique_labels}. "
-                    f"Set target_digit in Qconfig.py to enable one-vs-rest binary mode."
-                )
-        else:
-            # One-vs-rest mode: labels will be processed into {-1, 1} during preprocessing
-            pass
+        if not np.array_equal(unique_labels, np.array([-1, 1])):
+            raise ValueError(
+                f"Labels must be {{-1, +1}} for binary classification. Got {unique_labels}. "
+                f"Set classes in Qconfig.py (e.g., classes = (0, 1)) to filter exactly two classes."
+            )

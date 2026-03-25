@@ -170,8 +170,7 @@ def load_idx_dataset(images_path: str, labels_path: str) -> Tuple[np.ndarray, np
 
 def load_mnist_subset(n_samples: int = 1000,
                      classes: Tuple[int, int] = (0, 1),
-                     flatten: bool = True,
-                     target_digit: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
+                     flatten: bool = True) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load a subset of MNIST dataset for binary classification.
     
@@ -193,46 +192,16 @@ def load_mnist_subset(n_samples: int = 1000,
     X, y = mnist.data, mnist.target.astype(int)
     
     # Filter for binary classification
-    if target_digit is not None:
-        print(f"Loading balanced MNIST subset for one-vs-rest (target digit {target_digit})...")
-        # 1. Get positive samples (target digit)
-        mask_pos = (y == target_digit)
-        X_pos, y_pos = X[mask_pos], y[mask_pos]
-        
-        # 2. Get negative samples (all other digits)
-        mask_neg = (y != target_digit)
-        X_neg, y_neg = X[mask_neg], y[mask_neg]
-        
-        # 3. Balance the dataset (50% positive, 50% negative)
-        n_pos = min(len(X_pos), n_samples // 2)
-        n_neg = min(len(X_neg), n_samples - n_pos)
-        
-        if len(X_pos) > n_pos:
-            idx_pos = np.random.choice(len(X_pos), n_pos, replace=False)
-            X_pos, y_pos = X_pos[idx_pos], y_pos[idx_pos]
-            
-        if len(X_neg) > n_neg:
-            idx_neg = np.random.choice(len(X_neg), n_neg, replace=False)
-            X_neg, y_neg = X_neg[idx_neg], y_neg[idx_neg]
-            
-        X = np.concatenate([X_pos, X_neg])
-        y = np.concatenate([y_pos, y_neg])
-        
-        # Shuffle
-        idx_shuffle = np.random.permutation(len(X))
-        X, y = X[idx_shuffle], y[idx_shuffle]
-        
-    else:
-        print(f"Loading MNIST subset (classes {classes[0]} and {classes[1]})...")
-        mask = (y == classes[0]) | (y == classes[1])
-        X = X[mask]
-        y = y[mask]
-        
-        # Limit samples
-        if len(X) > n_samples:
-            indices = np.random.choice(len(X), n_samples, replace=False)
-            X = X[indices]
-            y = y[indices]
+    print(f"Loading MNIST subset (classes {classes[0]} and {classes[1]})...")
+    mask = (y == classes[0]) | (y == classes[1])
+    X = X[mask]
+    y = y[mask]
+    
+    # Limit samples
+    if len(X) > n_samples:
+        indices = np.random.choice(len(X), n_samples, replace=False)
+        X = X[indices]
+        y = y[indices]
     
     # Convert to numpy array if needed
     if hasattr(X, 'values'):
@@ -253,7 +222,6 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
                 image_size: Optional[int] = 4,
                 normalization: str = 'minmax',
                 encoding_type: str = 'feature_map',
-                target_digit: Optional[int] = None,
                 **kwargs) -> Tuple[np.ndarray, np.ndarray]:
     """
     Universal dataset loader with automatic preprocessing.
@@ -265,8 +233,6 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         image_size: Target image size (if applicable)
         normalization: Normalization method
         encoding_type: 'feature_map', 'amplitude', or 'patch'
-        target_digit: If provided, use one-vs-rest encoding (target digit → +1,
-                      all other digits → -1). Overrides any 'classes' kwarg.
         **kwargs: Additional arguments for specific loaders
     
     Returns:
@@ -334,13 +300,10 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
             
             X, y = load_idx_dataset(source, labels_path)
             
-        # One-vs-rest: keep full dataset; remapping happens in preprocess_for_quantum.
-        # Legacy two-class filter only applies when target_digit is NOT set.
-        if target_digit is None:
-            print(f"Filtering for binary classes: {binary_classes}")
-            mask = (y == binary_classes[0]) | (y == binary_classes[1])
-            X = X[mask]
-            y = y[mask]
+        print(f"Filtering for binary classes: {binary_classes}")
+        mask = (y == binary_classes[0]) | (y == binary_classes[1])
+        X = X[mask]
+        y = y[mask]
     
     elif dataset_type == 'npz':
         X, y = load_npz_dataset(source)
@@ -353,7 +316,7 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
         X, y = load_image_directory(source, image_size=target_size, **kwargs)
     
     elif dataset_type == 'mnist':
-        X, y = load_mnist_subset(target_digit=target_digit, **kwargs)
+        X, y = load_mnist_subset(**kwargs)
     
     elif dataset_type == 'array' and X is None:
         X, y = source
@@ -365,43 +328,10 @@ def load_dataset(source: Union[str, Tuple[np.ndarray, np.ndarray]],
     else:
         raise ValueError(f"Unknown dataset type: {dataset_type}")
     
-    # 3. Universal balancing for One-vs-Rest
-    if target_digit is not None:
-        print(f"Applying universal balancing for one-vs-rest (target digit {target_digit})...")
-        mask_pos = (y == target_digit)
-        X_pos, y_pos = X[mask_pos], y[mask_pos]
-        mask_neg = (y != target_digit)
-        X_neg, y_neg = X[mask_neg], y[mask_neg]
-        
-        n_pos = len(X_pos)
-        n_neg = len(X_neg)
-        
-        if n_pos > 0 and n_neg > 0:
-            n_target = min(n_pos, n_neg)
-            
-            # Subsample positive
-            idx_pos = np.random.choice(n_pos, n_target, replace=False)
-            X_pos, y_pos = X_pos[idx_pos], y_pos[idx_pos]
-            
-            # Subsample negative
-            idx_neg = np.random.choice(n_neg, n_target, replace=False)
-            X_neg, y_neg = X_neg[idx_neg], y_neg[idx_neg]
-            
-            print(f"  [Balancer] Balanced to {n_target} samples per class (Total: {2*n_target})")
-            
-            X = np.concatenate([X_pos, X_neg])
-            y = np.concatenate([y_pos, y_neg])
-            
-            # Shuffle
-            idx_shuffle = np.random.permutation(len(X))
-            X, y = X[idx_shuffle], y[idx_shuffle]
-        else:
-            print(f"  Warning: Could not balance dataset. Positive samples: {n_pos}, Negative samples: {n_neg}")
-
     # Preprocess for quantum circuit
     X_processed, y_processed = preprocess_for_quantum(
         X, y, n_qubits=n_qubits, image_size=image_size, normalization=normalization,
-        encoding_type=encoding_type, target_digit=target_digit
+        encoding_type=encoding_type
     )
     
     print(f"Preprocessed for quantum: {X_processed.shape}, labels: {np.unique(y_processed)}")

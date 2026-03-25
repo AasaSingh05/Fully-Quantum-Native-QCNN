@@ -61,7 +61,7 @@ from QCNN.utils.metadata_logger import save_metadata
 
 def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
          encoding='feature_map', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt",
-         learning_rate=None, target_digit=None):
+         learning_rate=None, classes=None):
     """Main execution function
     
     Args:
@@ -73,8 +73,8 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         image_size (int or None): Width/height of square image
         log_file (str): Path to output log file
         summary_log_file (str): Path to summary output log file
-        target_digit (int or None): Override for config.target_digit (0-9 for MNIST).
-                                    If None, the value from Qconfig is used.
+        classes (tuple or None): Override for config.classes (e.g. (0, 1) for MNIST).
+                                 If None, the value from Qconfig is used.
     """
     # Initialize logger to capture all output to file
     sys.stdout = Logger(log_file)
@@ -97,10 +97,10 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     print(f" Image Size: {config.image_size}x{config.image_size}")
     print(f" Training: {config.n_epochs} epochs, lr={config.learning_rate}")
 
-    # Resolve target_digit: CLI arg overrides Qconfig value
-    if target_digit is not None:
-        config.target_digit = target_digit
-    print(f" Binary classification: digit {config.target_digit} → +1  |  all others → -1")
+    # Resolve classes: CLI arg overrides Qconfig value
+    if classes is not None:
+        config.classes = classes
+    print(f" Binary classification: classes {config.classes} mapped to +1 and -1")
 
     # save metadata after config is created
     save_metadata("Results/metadata.json", config)
@@ -139,7 +139,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
             image_size=config.image_size,
             normalization=config.preprocessing_mode,
             encoding_type=config.encoding_type,
-            target_digit=config.target_digit,
+            classes=config.classes,
         )
     
     # NEW: Limit total dataset size if requested, BEFORE splitting and expensive preprocessing.
@@ -184,7 +184,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
             image_size=config.image_size,
             normalization=config.preprocessing_mode,
             encoding_type=config.encoding_type
-            # synthetic data already has {-1,+1} labels; no target_digit needed
+            # synthetic data already has {-1,+1} labels; no classes needed
         )
     
     print("Dataset ready.")
@@ -464,11 +464,9 @@ if __name__ == "__main__":
                        help='Encoding strategy to use')
     parser.add_argument('--image-size', type=int, default=None,
                        help='Width/height of square input images')
-    parser.add_argument('--classes', type=int, nargs=2, default=[0, 1],
-                       help='(Legacy) Two classes for binary classification when --target-digit is not set')
-    parser.add_argument('--target-digit', type=int, default=None, metavar='DIGIT',
-                       help='Digit to classify as +1 (all others become -1). '
-                            'Overrides target_digit in Qconfig.py. (0-9 for MNIST)')
+    parser.add_argument('--classes', type=int, nargs=2, default=None,
+                       help='Two classes for binary classification. '
+                            'Overrides classes in Qconfig.py. e.g --classes 0 1')
     parser.add_argument('--log-file', type=str, default='training_log.txt',
                        help='File to save training logs (default: training_log.txt)')
     parser.add_argument('--summary-log', type=str, default='training_summary.txt',
@@ -496,7 +494,7 @@ if __name__ == "__main__":
             log_file=args.log_file,
             summary_log_file=args.summary_log,
             learning_rate=args.learning_rate,
-            target_digit=args.target_digit,
+            classes=tuple(args.classes) if args.classes else None,
         )
         
         if not args.no_profile:

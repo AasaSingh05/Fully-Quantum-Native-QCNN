@@ -9,14 +9,14 @@ import matplotlib
 # Set non-interactive backend
 matplotlib.use('Agg')
 
-target_digit = 0
+classes = (0, 1)
 n_samples = 1000
 image_size = 4
 n_qubits = 16
 encoding_type = 'feature_map'
 
-print(f"Loading raw MNIST (target digit {target_digit})...")
-X_raw, y_raw = load_mnist_subset(n_samples=n_samples, target_digit=target_digit, flatten=True)
+print(f"Loading raw MNIST (classes {classes[0]} and {classes[1]})...")
+X_raw, y_raw = load_mnist_subset(n_samples=n_samples, classes=classes, flatten=True)
 
 # Count raw labels
 raw_counts = Counter(y_raw)
@@ -29,8 +29,7 @@ X_processed, y_processed = preprocess_for_quantum(
     n_qubits=n_qubits,
     image_size=image_size,
     normalization='minmax',
-    encoding_type=encoding_type,
-    target_digit=target_digit
+    encoding_type=encoding_type
 )
 
 # Count processed labels
@@ -45,9 +44,9 @@ plt.xlabel('Original Digit Labels')
 plt.ylabel('Frequency')
 plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-# Highlight target digit
+# Highlight classes
 for i, label in enumerate(raw_labels):
-    if label == target_digit:
+    if label in classes:
         bars_raw[i].set_color('salmon')
 
 plt.tight_layout()

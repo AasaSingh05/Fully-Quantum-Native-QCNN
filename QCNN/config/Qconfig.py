@@ -7,10 +7,9 @@ class QuantumNativeConfig:
 
     Binary classification mode
     --------------------------
-    The QCNN produces a single ⟨Z⟩ readout and therefore supports binary
-    classification only.  Use ``target_digit`` to choose which class is
-    treated as the positive class (+1).  All other classes map to −1
-    (one-vs-rest).  For MNIST this is any digit 0–9.
+    classification only.  Use ``classes`` to choose which two classes are
+    treated as the target categories (+1 and -1). For MNIST this can be any
+    pair of digits (e.g., (0, 1)).
     """
     
     def __init__(self):
@@ -23,12 +22,11 @@ class QuantumNativeConfig:
         self.n_features = self.image_size ** 2  # Total input features
         self.preprocessing_mode = 'minmax'  # 'minmax', 'standard', 'robust'
 
-        # One-vs-rest binary classification target
-        # Set target_digit to the class label you want the model to learn.
-        # For MNIST: 0-9  |  For synthetic data: ignored (labels already {-1,+1})
-        # All other classes are mapped to label -1 automatically.
-        self.target_digit = 0   # ← CHANGE THIS to classify a different digit
-        self.binary_mode  = 'one_vs_rest'  # only supported mode currently
+        # Strict binary classification classes
+        # Set classes to the tuple of class labels you want the model to classify.
+        # For MNIST: (0, 1)  |  For synthetic data: ignored (labels already {-1,+1})
+        self.classes = (0, 1)
+        self.binary_mode = 'strict_binary'
         
         # Encoding strategy: 'feature_map', 'amplitude', 'patch'
         #   feature_map  – 1 qubit per feature (original, image_size² qubits)
