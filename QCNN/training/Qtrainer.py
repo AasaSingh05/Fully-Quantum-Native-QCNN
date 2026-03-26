@@ -182,6 +182,8 @@ class QuantumNativeTrainer:
         
         # Flatten initial parameters for optimizer
         params_flat = model._flatten_params(model.quantum_params)
+        ema_params_flat = params_flat.copy()
+        ema_decay = getattr(model.config, 'ema_decay', 0.99)
         n_epochs = model.config.n_epochs
         
         # Stability parameters
@@ -226,6 +228,9 @@ class QuantumNativeTrainer:
                 
                 params_flat = self.quantum_optimizer.apply_grad(grad, (params_flat,))[0]
                 
+                # Update Exponential Moving Average (EMA)
+                ema_params_flat = (ema_decay * ema_params_flat) + ((1.0 - ema_decay) * params_flat)
+                
                 # Safe logging of real values
                 epoch_quantum_loss += float(loss_val)
                 n_quantum_batches += 1
@@ -244,7 +249,9 @@ class QuantumNativeTrainer:
                     print(f"Epoch {epoch+1} Batch {i//model.config.batch_size+1} | Loss: {float(loss_val):.6f}")
             
             avg_loss = epoch_quantum_loss / max(1, n_quantum_batches)
-            model.quantum_params = model._unflatten_params(params_flat)
+            
+            # Switch to EMA parameters for evaluation
+            model.quantum_params = model._unflatten_params(ema_params_flat)
             
             # Compute accuracies; limit train accuracy sample size for speed
             train_preds = model.quantum_predict_batch(X_train[:200])
@@ -267,7 +274,7 @@ class QuantumNativeTrainer:
             
             # Best Model Restoration & Stability Logic
             if test_accuracy > best_accuracy:
-                print(f"  [STABILITY] Test accuracy improved: {best_accuracy:.2%} -> {test_accuracy:.2%}. Saving best params.")
+                print(f"  [STABILITY] Test accuracy improved: {best_accuracy:.2%} -> {test_accuracy:.2%} (via EMA). Saving best params.")
                 best_accuracy = test_accuracy
                 best_quantum_params = {k: v.copy() for k, v in model.quantum_params.items()}
                 patience_counter = 0
@@ -278,10 +285,15 @@ class QuantumNativeTrainer:
                         current_lr *= lr_factor
                         self.quantum_optimizer.stepsize = current_lr
                         print(f"  [STABILITY] Plateau detected. Reducing Learning Rate to {current_lr:.6f}")
+                        # Restore current params from best if we plateaued? 
+                        # Usually we just drop LR and continue.
                         patience_counter = 0 # reset once per LR drop to allow recovery
                     else:
                         print(f"  [STABILITY] Early Stopping triggered after {epoch+1} epochs due to lack of improvement.")
                         break
+            
+            # Restore model to non-EMA params for the next epoch's training
+            model.quantum_params = model._unflatten_params(params_flat)
             
             progress_percent = ((epoch + 1) / n_epochs) * 100
             estimated_total = elapsed / ((epoch + 1) / n_epochs)

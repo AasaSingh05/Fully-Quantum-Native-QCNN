@@ -61,7 +61,7 @@ from QCNN.utils.metadata_logger import save_metadata
 
 def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
          encoding='feature_map', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt",
-         learning_rate=None, classes=None):
+         learning_rate=None, classes=None, epochs=None, batch_size=None):
     """Main execution function
     
     Args:
@@ -95,7 +95,13 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
     print(f" Configuration: {config.n_qubits} qubits, {config.n_conv_layers} quantum layers")
     print(f" Encoding: {config.encoding_type}")
     print(f" Image Size: {config.image_size}x{config.image_size}")
-    print(f" Training: {config.n_epochs} epochs, lr={config.learning_rate}")
+    
+    if epochs is not None:
+        config.n_epochs = epochs
+    if batch_size is not None:
+        config.batch_size = batch_size
+        
+    print(f" Training: {config.n_epochs} epochs, lr={config.learning_rate}, batch_size={config.batch_size}")
 
     # Resolve classes: CLI arg overrides Qconfig value
     if classes is not None:
@@ -475,6 +481,10 @@ if __name__ == "__main__":
                        help='Disable cProfile performance profiling')
     parser.add_argument('--learning-rate', type=float, default=None,
                        help='Learning rate for quantum optimization')
+    parser.add_argument('--epochs', type=int, default=None,
+                       help='Number of training epochs')
+    parser.add_argument('--batch-size', type=int, default=None,
+                       help='Batch size for training')
     
     args = parser.parse_args()
     
@@ -495,6 +505,8 @@ if __name__ == "__main__":
             summary_log_file=args.summary_log,
             learning_rate=args.learning_rate,
             classes=tuple(args.classes) if args.classes else None,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
         )
         
         if not args.no_profile:
