@@ -1,67 +1,74 @@
-# QCNN Dataset Running Guide
+# QCNN Execution Guide 🚀
 
-This project supports a wide range of formats. Follow this guide to run the training on your data.
+This guide explains how to run the Fully Quantum-Native QCNN for various tasks, from standard training to advanced preprocessing visualization.
 
-## Standard Folder Structure
-Place your datasets in the `datasets/` folder (created at the project root).
-```text
-datasets/
-├── MNIST/              <-- Standard IDX-UBYTE files
-├── images/             <-- Folders of png/jpg images
-└── your_data.npz       <-- NumPy compressed data
-```
+---
 
-## Running Training
-This project provides launchers for both Linux/macOS and Windows.
+## 🏗️ Environment Setup
 
-### Linux / macOS / WSL
-Use the shell script:
+Ensure you have the required packages installed:
 ```bash
-# Runs matching (0 vs 1) from datasets/MNIST
-./runApp.sh
-```
-
-### Windows (Command Prompt / PowerShell)
-Use the batch script:
-```batch
-# Runs matching (0 vs 1) from datasets\MNIST
-runApp.bat
+pip install pennylane pennylane-lightning numpy matplotlib scikit-learn seaborn pillow
 ```
 
 ---
 
-## Dataset Examples
-The loaders will automatically find your data.
+## 🏃 Running Training (main.py)
 
-### 2. Run specific digits
+The `main.py` script is the central entry point. It supports a variety of datasets and encoding strategies.
+
+### 1. MNIST Classification (Standard)
+Classify digits 0 and 1 using **Amplitude Encoding** (8 qubits for 256 pixels):
 ```bash
-# Run (3 vs 7) from the MNIST folder
-./runApp.sh idx datasets/MNIST auto 28 3 7
+python main.py --dataset mnist --classes 0 1 --samples 1000 --encoding amplitude
 ```
 
-### 3. Run Custom Images
-Ensure your images are in `datasets/images/class_A` and `datasets/images/class_B`.
+### 2. High-Resolution Classification (Patch-based)
+Used for larger images or when local feature extraction is critical. This uses **16 qubits** by default for the final processing:
 ```bash
-./runApp.sh images datasets/images
+python main.py --dataset mnist --classes 3 7 --samples 500 --encoding patch
 ```
 
-### 4. Run NPZ or CSV
-```bash
-./runApp.sh npz datasets/test_data.npz
-```
+### 3. Custom Datasets
+- **NPZ File**: `python main.py --dataset npz --path datasets/my_data.npz`
+- **CSV File**: `python main.py --dataset csv --path datasets/my_data.csv`
+- **Image Directory**: `python main.py --dataset images --path datasets/my_images/` (Ensure folders `class_0` and `class_1` exist)
 
 ---
 
-## Advanced Usage (main.py)
-You can use the Python script directly for full control:
-```bash
-python main.py --dataset idx --path datasets/MNIST --classes 0 1 --samples 100 --encoding patch
-```
+## 🎨 Visualization Tools
 
-### Available Arguments:
-- `--dataset`: `auto`, `idx`, `images`, `npz`, `csv`, `mnist`
-- `--path`: Path to file or directory
-- `--classes`: Two integers for binary classification
-- `--samples`: Limit number of training samples
-- `--encoding`: `feature_map`, `amplitude`, `patch`
-- `--image-size`: Input dimensions (e.g. 28 for MNIST)
+### Quantum Preprocessing Visualizer
+See how the model transforms raw images into quantum-compatible states:
+```bash
+python QCNN/utils/visualize_preprocessing.py
+```
+*Outputs are saved to `Results/preprocessing_images/`.*
+
+---
+
+## ⚙️ Advanced CLI Arguments
+
+| Argument | Options | Description |
+| :--- | :--- | :--- |
+| `--dataset` | `mnist`, `npz`, `csv`, `images`, `synthetic` | Source of training data |
+| `--classes` | `INT INT` | Two classes for binary classification (e.g., `0 1`) |
+| `--encoding` | `amplitude`, `patch`, `feature_map` | How data is mapped to qubits |
+| `--samples` | `INT` | Max samples to use (for faster testing) |
+| `--learning-rate`| `FLOAT` | Initial learning rate (default: 0.02) |
+| `--epochs` | `INT` | Number of training epochs (default: 50) |
+| `--batch-size` | `INT` | Training batch size (default: 32) |
+| `--use-mse` | (flag) | Use Mean Squared Error instead of BCE |
+| `--no-profile` | (flag) | Disable performance profiling |
+
+---
+
+## 📊 Monitoring Results
+
+After running `main.py`, results are automatically organized in the `Results/` directory:
+
+- **`Results/Graphs/`**: Training curves, Confusion Matrices, ROC curves, and Precision-Recall plots.
+- **`Results/Weights/`**: Saved model parameters (`.npy` files).
+- **`Results/metadata.json`**: Comprehensive log of the experiment configuration.
+- **`training_summary.txt`**: A concise per-epoch summary of loss and accuracy.
+- **`training_log.txt`**: Detailed terminal output.

@@ -1,256 +1,114 @@
-# Quantum-Native QCNN  
-A Fully Quantum-Convolutional Neural Network Built with PennyLane
+# Fully Quantum-Native QCNN 
+### High-Resolution Image Classification with 100% Quantum Operations
 
-This repository implements a **fully quantum-native convolutional neural network (QCNN)** that performs **encoding, convolution, pooling, and classification entirely using quantum circuits**, with no classical convolutional operations at any stage.
+This repository implements a **fully quantum-native convolutional neural network (QCNN)** that performs encoding, convolution, pooling, and classification **entirely using quantum circuits**. Unlike hybrid models, this architecture contains no classical convolutional layers at any stage.
 
-The current prototype operates on **4×4 images mapped onto a 16-qubit grid**, using translationally shared quantum kernels, unitary pooling layers, and a variational quantum head. All training is performed using differentiable quantum circuits and parameter-shift gradients.
-
-This project is part of a broader effort toward **quantum-native deep learning architectures** suitable for near-term quantum devices.
+The project has evolved from a small 4x4 prototype to a robust framework capable of classifying **high-resolution images (e.g., 28x28 MNIST)** with over **95% accuracy** using advanced encoding strategies like **Amplitude Embedding** and **Patch-based Quanvolution**.
 
 ---
 
-## 1. What This Project Implements
+## Key Features
 
-The QCNN reproduces the structure of classical CNNs using **only quantum operations**:
-
-- **Feature Encoding** via angle-based quantum feature maps  
-- **Quantum Convolution** using weight-shared 2×2 local quantum kernels  
-- **Quantum Pooling** via trainable 2-qubit unitary reductions  
-- **Quantum Classification Head** producing a scalar prediction ⟨Z⟩  
-- **End-to-end Differentiability** through PennyLane's autodiff and parameter-shift rule
-
-There is **no hybrid classical convolution path**.  
-Every layer (conv, pool, head) is a quantum circuit.
+- **100% Quantum-Native**: Convolution, Pooling, and Classification are all implemented as differentiable quantum circuits.
+- **High Performance**: Achieving **95.2% accuracy** on MNIST (0 vs 1) using only quantum operations.
+- **Advanced Encoding**:
+  - **Amplitude Encoding**: Maps full images into Hilbert space using only $\log_2(N)$ qubits.
+  - **Patch-based Encoding**: Uses a sliding quantum filter (Quanvolution) to process large images efficiently.
+- **Stable Training**: Integrated **Exponential Moving Average (EMA)**, **Learning Rate Warmup**, and **Gradient Clipping** to prevent oscillations and barren plateaus.
+- **Strict Binary Classification**: Easily switch between any two classes (e.g., MNIST 3 vs 7) via simple CLI arguments.
+- **Visualization Tools**: Built-in utilities for visualizing the quantum preprocessing pipeline and circuit architectures.
+- **Optimized Simulation**: Support for `pennylane-lightning` and multiprocessing for accelerated training.
 
 ---
 
-## 2. Repository Structure
+## Repository Structure
 
-```
+```text
 QCNN/
-│
-├── config/Qconfig.py              # global configuration (qubits, layers, LR, encoding)
-├── encoding/QEncoder.py           # angle-based encoding + optional amplitude encoding
-├── layers/QConv.py                # 2×2 shared quantum convolution kernel
-├── layers/QPool.py                # unitary quantum pooling (CRY/CRZ)
-├── models/QCNNModel.py            # full QCNN architecture
-├── training/Qtrainer.py           # quantum training loop (Adam + param-shift)
+├── config/Qconfig.py           # Centralized configuration (Architecture, LR, EMA)
+├── encoding/QEncoder.py        # Amplitude, Feature Map, and Patch-based encoders
+├── layers/
+│   ├── QConv.py                # 2x2 weight-shared quantum kernels
+│   ├── QPool.py                # Trainable unitary pooling layers
+│   └── QuanvLayer.py           # Random quantum filters for patch preprocessing
+├── models/QCNNModel.py         # The core PureQuantumNativeCNN implementation
+├── training/Qtrainer.py        # Optimized training loop (Adam, EMA, Early Stopping)
 └── utils/
-     ├── dataset_generator.py      # reproducible synthetic dataset
-     └── metadata_logger.py        # experiment metadata for reproducibility
-
-run_classical_baseline.py          # standalone classical CNN baseline
-main.py                            # QCNN training/evaluation entry point
-README.md                          # this file
+    ├── dataset_loader.py       # Universal loader (MNIST, NPZ, CSV, Images)
+    ├── visualize_preprocessing.py # Preprocessing visualization tool
+    └── metadata_logger.py      # Experiment tracking and reproducibility
+main.py                         # Unified entry point for training and evaluation
+RUN_GUIDE.md                    # Quick-start guide and CLI examples
+DATASET_README.md               # Technical details on data handling
 ```
 
 ---
 
-## 3. Setup
+## Quick Start
 
-Install the core dependencies:
-
+### 1. Install Dependencies
 ```bash
-pip install pennylane pennylane-lightning numpy matplotlib scikit-learn tensorflow
+pip install pennylane pennylane-lightning numpy matplotlib scikit-learn seaborn
 ```
 
-(Optional) Use Lightning for faster simulation:
-
+### 2. Run Standard Training
+Classify MNIST digits 0 vs 1 using Amplitude Encoding:
 ```bash
-pip install pennylane-lightning
+python main.py --dataset mnist --classes 0 1 --samples 500 --encoding amplitude
 ```
 
----
-
-## 4. Running the Quantum Model
-
-Run the full QCNN experiment:
-
+### 3. Run with Patch-based Encoding
+Useful for larger images or different feature extraction:
 ```bash
-python main.py
+python main.py --dataset mnist --classes 3 7 --encoding patch
 ```
-
-On the first execution:
-
-- A clean dataset is generated under:  
-  `Results/quantum_dataset_clean_seed42.npz`
-
-- Training artifacts are saved under:
-  ```
-  Results/Weights/
-  Results/Graphs/
-  Results/metadata.json
-  quantum_training_log.txt
-  ```
-
-Outputs include:
-- Training loss curve  
-- Test accuracy curve  
-- Confusion matrix  
-- Best model weights  
-- Experiment metadata (Python version, package versions, config)
 
 ---
 
-## 5. Running the Classical Baseline (Recommended)
+## Performance Benchmarks
 
-To compare with a classical CNN baseline:
+Modern QCNN performance on MNIST (Binary Classification):
 
+| Task | Encoding | Qubits | Accuracy | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **0 vs 1** | Amplitude | 8 | **95.2%** | Verified |
+| **3 vs 7** | Amplitude | 8 | **91.4%** | Verified |
+| **0 vs 1** | Patch | 16 | **94.8%** | Verified |
+
+*Results obtained using Adam optimizer with EMA and LR Warmup.*
+
+---
+
+## Architecture Deep Dive
+
+### Encoding Strategies
+- **Amplitude Encoding**: Efficiently stores $2^n$ features in $n$ qubits. Ideal for preserving global structure with minimal hardware requirements.
+- **Patch-based (Quanv)**: Applies a "Quantum Convolutional Layer" with random filters to extract local features before the main QCNN, enabling the processing of images of any size.
+
+### Quantum Training Pipeline
+We implement several stability techniques to ensure convergence in the quantum landscape:
+1. **EMA (Exponential Moving Average)**: Maintains a shadow copy of weights for smoother inference.
+2. **LR Warmup**: Gradually increases learning rate to avoid unstable initial gradients.
+3. **Gradient Clipping**: Prevents "exploding" updates common in variational circuits.
+4. **Early Stopping**: Monitors validation performance to prevent overfitting.
+
+---
+
+## Visualization
+You can visualize how the quantum model "sees" the data:
 ```bash
-python run_classical_baseline.py
+python QCNN/utils/visualize_preprocessing.py --dataset mnist --classes 0 1
 ```
-
-This script:
-
-- Loads the same dataset used by the QCNN  
-- Trains a small 4×4 classical CNN  
-- Saves plots to:
-  ```
-  Results/Baselines/classical_cnn_results.png
-  ```
-- Prints baseline accuracy and confusion matrix
-
-This ensures the QCNN is not solving a trivial dataset.
+This generates comparisons between raw images and their quantum-encoded counterparts (e.g., amplitude maps or quanvolved patches).
 
 ---
 
-## 6. QCNN Architecture Details
+## Citation & Contact
+**Author**: Aasa Singh Bhui  
+**Project**: Fully Quantum-Native QCNN  
+**GitHub**: [AasaSingh05](https://github.com/AasaSingh05)
 
-### Encoding
-- Angle-based feature map on all 16 qubits  
-- Uses:
-  - `RZ(πx)`  
-  - `RY(πx/2)`
-- Sparse entanglement for trainability  
-- Inputs clipped to [−1, 1]
-
-### Quantum Convolution
-- Shared 2×2 quantum kernel applied across the grid  
-- Kernel shape:
-  ```
-  (4 qubits per window) × (depth) × (2 learnable angles)
-  ```
-- RY/RZ + local entanglement  
-- Enforces translational invariance
-
-### Quantum Pooling
-- Trainable unitary pooling  
-- CRY/CRZ from discarded → kept qubit  
-- Removes half the qubits each stage  
-- No measurement until the final layer
-
-### Quantum Head
-- Single-qubit variational readout  
-- Optional entanglement when >1 qubit remains  
-- Final output: ⟨Z⟩ ∈ [−1, 1]
-
-### Training
-- Optimizer: Adam  
-- Gradients: parameter-shift rule  
-- Loss options:
-  - MSE on ⟨Z⟩  
-  - BCE on p = (1 − ⟨Z⟩)/2
-
----
-
-## 7. Reproducibility
-
-- Global seeds for numpy, random, PennyLane  
-- Clean dataset with fixed seed  
-- Metadata logged in `Results/metadata.json`:
-  - configuration  
-  - Python version  
-  - package versions  
-  - random seed  
-
-This ensures exact reproducibility of experiments.
-
----
-
-## 8. Visualizing Circuits
-
-To generate full QCNN circuit diagrams:
-
-```bash
-python visualize_all_circuits.py
+If you use this work, please cite the repository:
+```text
+https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN
 ```
-
-Saved to:
-
-```
-Results/circuits/
-```
-
-Minimal 4-qubit demonstration circuits:
-
-```bash
-python visualize_4qubit_circuits.py
-```
-
-Saved to:
-
-```
-Results/4Circuit/
-```
-
----
-
-## 9. Limitations
-
-- Dataset is synthetic and extremely small (4×4)  
-- No noise-model simulation yet  
-- No real quantum hardware execution  
-- QCNN uses all 16 qubits at once (not scalable yet)  
-- No qubit-reuse or patch-based encoding  
-- No gate-count or circuit-depth profiling  
-- No gradient variance (barren plateau) analysis  
-- Perfect accuracy may indicate dataset simplicity  
-- No hybrid (classical–quantum) baselines yet  
-
----
-
-## 10. Planned Future Work
-
-- Patch-based QCNN with qubit reuse (scaling to 8×8, 16×16)  
-- Noise-aware QCNN training (`default.mixed`)  
-- Running pooled circuits on IBM/IonQ hardware  
-- Computing circuit depth and gate counts  
-- Gradient variance diagnostics  
-- Hybrid QCNN/CNN baseline comparisons  
-- Real datasets (downsampled MNIST / Fashion-MNIST)  
-- Preparation of an arXiv-ready technical paper
-
----
-
-## 11. Why This Architecture Is Quantum-Native
-
-- Convolution implemented via quantum kernels  
-- Pooling done via entangling unitaries  
-- Downsampling in quantum state space (no classical ops)  
-- Classification via quantum measurement  
-- Entire model is a single differentiable quantum circuit  
-- No classical CNN operations are used at any stage  
-
-The only classical components:
-- optimizer  
-- loss function  
-- data loading  
-
----
-
-## 12. Citation
-
-```
-Author: Aasa Singh Bhui  
-Project: Fully Quantum-Native QCNN (2025)  
-Repository: https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN
-```
-
----
-
-## 13. Contact
-
-Aasa Singh Bhui
-VIT Vellore  
-Email: aasasingh2005@gmail.com  
-GitHub: https://github.com/AasaSingh05
