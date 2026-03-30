@@ -1,10 +1,10 @@
-# Advanced Dataset Guide for QCNN 📊
+# Advanced Dataset Guide for QCNN
 
 This guide provides technical details on how the Fully Quantum-Native QCNN handles data, including modern binary classification modes, diverse encoding strategies, and preprocessing pipelines.
 
 ---
 
-## ⚖️ Strict Binary Classification
+## Strict Binary Classification
 
 The model now operates in a **Strict Binary Classification** mode. Instead of "one-vs-rest", it filters the entire dataset to only include two specific classes of interest.
 
@@ -20,7 +20,7 @@ python main.py --dataset mnist --classes 3 7
 
 ---
 
-## 🧬 Quantum Encoding Strategies
+## Quantum Encoding Strategies
 
 The QCNN supports three distinct ways of mapping classical data into quantum states:
 
@@ -44,7 +44,7 @@ The QCNN supports three distinct ways of mapping classical data into quantum sta
 
 ---
 
-## 🛠️ Preprocessing Pipeline
+## Preprocessing Pipeline
 
 The `load_dataset()` function in `QCNN/utils/dataset_loader.py` follows this sequence:
 
@@ -59,7 +59,7 @@ The `load_dataset()` function in `QCNN/utils/dataset_loader.py` follows this seq
 
 ---
 
-## 🧪 Quick Test: Visualization
+## Quick Test: Visualization
 
 To verify your dataset and see how it is transformed before hitting the quantum circuit:
 ```bash
@@ -69,7 +69,7 @@ This tool saves visual comparisons to `Results/Preprocessing_Visuals/`.
 
 ---
 
-## 📂 Supported Formats Summary
+## Supported Formats Summary
 
 | Type | Format | Notes |
 | :--- | :--- | :--- |

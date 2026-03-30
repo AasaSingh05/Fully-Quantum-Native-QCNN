@@ -1,10 +1,10 @@
-# QCNN Execution Guide 🚀
+# QCNN Execution Guide
 
 This guide explains how to run the Fully Quantum-Native QCNN for various tasks, from standard training to advanced preprocessing visualization.
 
 ---
 
-## 🏗️ Environment Setup
+## Environment Setup
 
 Ensure you have the required packages installed:
 ```bash
@@ -13,7 +13,7 @@ pip install pennylane pennylane-lightning numpy matplotlib scikit-learn seaborn 
 
 ---
 
-## 🏃 Running Training (main.py)
+## Running Training (main.py)
 
 The `main.py` script is the central entry point. It supports a variety of datasets and encoding strategies.
 
@@ -36,7 +36,7 @@ python main.py --dataset mnist --classes 3 7 --samples 500 --encoding patch
 
 ---
 
-## 🎨 Visualization Tools
+## Visualization Tools
 
 ### Quantum Preprocessing Visualizer
 See how the model transforms raw images into quantum-compatible states:
@@ -47,7 +47,7 @@ python QCNN/utils/visualize_preprocessing.py
 
 ---
 
-## ⚙️ Advanced CLI Arguments
+## Advanced CLI Arguments
 
 | Argument | Options | Description |
 | :--- | :--- | :--- |
@@ -63,7 +63,7 @@ python QCNN/utils/visualize_preprocessing.py
 
 ---
 
-## 📊 Monitoring Results
+## Monitoring Results
 
 After running `main.py`, results are automatically organized in the `Results/` directory:
 
