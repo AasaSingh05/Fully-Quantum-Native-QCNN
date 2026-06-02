@@ -19,125 +19,74 @@ class PureQuantumNativeCNN:
 
     #constructor
     def __init__(self, config: QuantumNativeConfig):
-        """
-        Initialize QCNN with device, parameters, and differentiable QNode.
-
-        Args:
-            config: QuantumNativeConfig containing qubit count, image size,
-                    number of layers, encoding type, and optimizer settings.
-        """
         self.config = config
         self.device = qml.device(config.device, wires=config.n_qubits)
-
-        # Store number of qubits for parameter calculation
         self.num_qubits = config.n_qubits
 
-        # Initialize quanvolutional layer if using patch-based encoding
         self.quanv_layer = None
         if config.encoding_type == 'patch':
             self.quanv_layer = QuanvolutionalLayer(
                 patch_size=config.patch_size,
                 n_filters=config.n_quanv_filters,
                 stride=config.patch_stride,
-                device_name=config.device,  # Use configured device (e.g. lightning.qubit)
+                device_name=config.device,
                 random_params=True
             )
 
-        # Initialize pure quantum parameters
         self.quantum_params = self._initialize_quantum_parameters()
 
-        # Create pure quantum circuit with high-performance differentiation
-        @qml.transforms.broadcast_expand
+        # FIX: removed @qml.transforms.broadcast_expand — not compatible with
+        # AmplitudeEmbedding / MottonenStatePreparation in PennyLane 0.38
         @qml.qnode(self.device, interface='autograd', diff_method='best')
         def quantum_circuit(x, flat_params):
-            # Unflatten parameters from flat vector
             params = self._unflatten_params(flat_params)
             return self._pure_quantum_forward(x, params)
 
         self.quantum_circuit = quantum_circuit
-
-        # Training metrics
         self.training_history = {'loss': [], 'accuracy': [], 'epoch_times': []}
 
     def _initialize_quantum_parameters(self) -> dict[str, pnp.ndarray]:
-        """
-        Allocate and initialize all trainable quantum parameters:
-        - Shared 2×2 convolution kernels per layer (depth=3)
-        - Per-layer unitary pooling parameters
-        - Deep variational classifier head
-
-        Returns:
-            dict mapping parameter names to PennyLane arrays.
-        """
         pnp.random.seed(42)
-
         params = {}
-        init_range = np.pi / 4  # Wider init for better quantum landscape exploration
-
-        # Convolutional kernels: depth=4 and SU(2) (3 params/qubit) for max expressivity
+        init_range = np.pi / 4
         conv_depth = 4
         kernel_shape = (4, conv_depth, 3)
-        
+
         for layer in range(self.config.n_conv_layers):
             kernel_tensor = pnp.array(
-                np.random.uniform(-init_range, init_range, kernel_shape), 
+                np.random.uniform(-init_range, init_range, kernel_shape),
                 requires_grad=True
             )
             params[f'quantum_conv_kernel_{layer}'] = kernel_tensor
 
-        # Per-layer pooling parameters (each pooling stage gets its own weights)
         max_pairs = self.num_qubits // 2
         pool_angles_per_layer = 3 * max_pairs
         n_pool_layers = max(1, self.config.n_conv_layers - 1)
         for pl in range(n_pool_layers):
             params[f'quantum_pooling_{pl}'] = pnp.array(
-                np.random.uniform(-init_range, init_range, pool_angles_per_layer), 
+                np.random.uniform(-init_range, init_range, pool_angles_per_layer),
                 requires_grad=True
             )
 
-        # Deeper variational classifier head (32 params)
         params['quantum_classifier'] = pnp.array(
-            np.random.uniform(-init_range, init_range, 32), 
+            np.random.uniform(-init_range, init_range, 32),
             requires_grad=True
         )
-
         return params
 
     def _flatten_params(self, params: dict[str, pnp.ndarray]) -> pnp.ndarray:
-        """
-        Flatten dictionary of parameter arrays into a single vector.
-
-        Args:
-            params: dict mapping parameter names to tensors.
-
-        Returns:
-            1D PennyLane array containing all parameters in order.
-        """
         return pnp.concatenate([p.flatten() for p in params.values()])
 
     def _unflatten_params(self, flat_params: pnp.ndarray) -> dict[str, pnp.ndarray]:
-        """
-        Convert flat parameter vector back into structured dictionary.
-
-        Args:
-            flat_params: 1D flattened parameter vector.
-
-        Returns:
-            dict mapping names to reshaped parameter tensors.
-        """
         params = {}
         idx = 0
-
-        # Convs: each layer kernel is (4, depth, 3) with depth=4
         conv_depth = 4
         kernel_size = 4 * conv_depth * 3
         for layer in range(self.config.n_conv_layers):
-            size = kernel_size
-            slice_flat = flat_params[idx:idx + size]
+            slice_flat = flat_params[idx:idx + kernel_size]
             params[f'quantum_conv_kernel_{layer}'] = slice_flat.reshape(4, conv_depth, 3)
-            idx += size
+            idx += kernel_size
 
-        # Per-layer pooling params
         max_pairs = self.num_qubits // 2
         pool_angles_per_layer = 3 * max_pairs
         n_pool_layers = max(1, self.config.n_conv_layers - 1)
@@ -145,170 +94,98 @@ class PureQuantumNativeCNN:
             params[f'quantum_pooling_{pl}'] = flat_params[idx:idx + pool_angles_per_layer]
             idx += pool_angles_per_layer
 
-        # Classifier: 32 params
         params['quantum_classifier'] = flat_params[idx:idx + 32]
         idx += 32
-
         return params
 
     def _pure_quantum_forward(self, x: np.ndarray, params: dict) -> float:
-        """
-        Full QCNN forward pass using only quantum operations.
-        Applies encoding, convolution, pooling, and shallow classification
-        before returning the expectation value ⟨Z⟩ on the readout qubit.
-
-        Supports three encoding strategies:
-          - 'feature_map': 1 qubit per feature (original)
-          - 'amplitude': log₂(features) qubits via amplitude embedding
-          - 'patch': data already reduced by quanvolutional layer, use amplitude
-
-        Args:
-            x: input data sample (already preprocessed for the encoding type)
-            params: structured parameter dictionary for all QCNN layers
-
-        Returns:
-            float expectation value for classification.
-        """
         all_qubits = list(range(self.config.n_qubits))
 
-        # Step 1: Pure quantum data encoding
         if self.config.encoding_type in ('amplitude', 'patch'):
-            # Amplitude encoding: x has 2^n_qubits features → n_qubits qubits
             PureQuantumEncoder.amplitude_encoding(x, all_qubits)
         else:
-            # Feature map: 1 qubit per feature
             PureQuantumEncoder.quantum_feature_map(x, all_qubits)
 
-        # Step 2: Quantum convolutional layers and pooling
         active_qubits = all_qubits.copy()
         current_image_size = self.config.image_size
 
-        pooling_reduction = getattr(self.config, 'pooling_reduction', 0.5)
-
         for layer in range(self.config.n_conv_layers):
-            # Apply quantum convolution to all windows on the CURRENT active layout
             n_current = len(active_qubits)
             if n_current >= 4:
-                # Calculate logical dimensions for the grid
                 width = int(math.sqrt(n_current))
                 while n_current % width != 0:
                     width -= 1
                 height = n_current // width
-                
-                # Use max as width for standard sliding
                 w, h = max(width, height), min(width, height)
-                base_windows = QuantumNativeConvolution.get_conv_windows(w, h)  # relative windows
-                kernel = params[f'quantum_conv_kernel_{layer}']  # shared weights: (4, depth, 2)
-
+                base_windows = QuantumNativeConvolution.get_conv_windows(w, h)
+                kernel = params[f'quantum_conv_kernel_{layer}']
                 for rel_window in base_windows:
-                    # Map relative window indices to actual active qubits
                     if max(rel_window) < n_current:
                         window_qubits = [active_qubits[i] for i in rel_window]
                         QuantumNativeConvolution.quantum_conv2d_kernel(kernel, window_qubits)
 
-            # Quantum pooling between layers (except last) — per-layer params
             if layer < self.config.n_conv_layers - 1:
                 n_qubits_current = len(active_qubits)
                 if n_qubits_current < 2:
                     break
-
-                # Default pairing: consecutive pairs
                 pairs = QuantumNativePooling.make_pairing(active_qubits)
                 if len(pairs) == 0:
                     break
-
                 keep = [k for (k, _) in pairs]
                 discard = [d for (_, d) in pairs]
-
-                # Use per-layer pooling weights for specialization
                 pool_key = f'quantum_pooling_{layer}'
                 QuantumNativePooling.quantum_unitary_pooling(
                     params[pool_key],
                     input_qubits=keep,
                     output_qubits=discard
                 )
-
-                # Only the keep wires survive for the next stage
                 active_qubits = keep
-
-                # Update logical image size after pooling
                 if current_image_size > 2:
                     current_image_size = max(2, current_image_size // 2)
 
-        # Step 3: Deep variational classifier (32 params)
         classifier_params = params['quantum_classifier']
         n_active = len(active_qubits)
         readout = active_qubits[0]
 
-        # Layer 1: RX + RY + RZ on all active qubits
         for i, q in enumerate(active_qubits[:min(n_active, 4)]):
             qml.RX(classifier_params[i * 2 % 32], wires=q)
             qml.RY(classifier_params[(i * 2 + 1) % 32], wires=q)
             qml.RZ(classifier_params[(i * 2 + 8) % 32], wires=q)
 
-        # Entanglement (Cascade)
         for i in range(n_active - 1):
             qml.CNOT(wires=[active_qubits[i], active_qubits[i+1]])
         if n_active >= 2:
-            qml.CNOT(wires=[active_qubits[n_active-1], active_qubits[0]]) # Ring
+            qml.CNOT(wires=[active_qubits[n_active-1], active_qubits[0]])
 
-        # Layer 2: Second SU(2) rotation layer
         for i, q in enumerate(active_qubits[:min(n_active, 4)]):
             qml.RX(classifier_params[(i * 2 + 16) % 32], wires=q)
             qml.RY(classifier_params[(i * 2 + 17) % 32], wires=q)
 
-        # Final entanglement + readout focus
         if n_active >= 2:
             qml.CNOT(wires=[active_qubits[0], active_qubits[min(n_active-1, 1)]])
         qml.RZ(classifier_params[31], wires=readout)
 
-        # Measurement
         return qml.expval(qml.PauliZ(readout))
 
     def _preprocess_input(self, x: np.ndarray) -> np.ndarray:
-        """
-        Apply encoding-specific preprocessing to a single or batch input sample.
-        
-        Args:
-            x: raw input sample or batch of samples
-            
-        Returns:
-            Preprocessed sample(s) ready for the quantum circuit.
-        """
         if self.config.encoding_type == 'patch' and self.quanv_layer is not None:
-            # Apply quanvolutional preprocessing
-            # A batch of images is 3D (n_samples, h, w) or 2D if flattened (n_samples, h*w)
-            # A single image is 2D (h, w) or 1D if flattened (h*w)
-            
-            # Check if it's a batch
             is_batched = False
             if x.ndim == 3:
                 is_batched = True
             elif x.ndim == 2:
-                # If it's 2D, it could be (h, w) or (batch, features)
-                # We assume if it's not square or matches n_samples from elsewhere, it's a batch.
-                # However, the most reliable way in this context is to check if it matches image_size
                 h, w = x.shape
                 if h != self.config.image_size or w != self.config.image_size:
                     is_batched = True
-            
             if is_batched:
                 return self.quanv_layer.process_batch(x, image_size=self.config.image_size)
             return self.quanv_layer.process_image(x)
-            
+
         elif self.config.encoding_type == 'amplitude':
-            # Ensure input is at most 2D: (features,) or (batch_size, features)
             if x.ndim > 2:
                 x = x.reshape(x.shape[0], -1)
-            elif x.ndim == 1:
-                # If it's 1D, it's already a feature vector.
-                pass
-            
-            # Ensure length is power of 2 for amplitude encoding
             target_len = 2 ** self.num_qubits
             is_batched = x.ndim == 2
             feat_len = x.shape[1] if is_batched else len(x)
-            
             if feat_len < target_len:
                 if is_batched:
                     padded = np.zeros((x.shape[0], target_len))
@@ -323,59 +200,28 @@ class PureQuantumNativeCNN:
             return x
 
     def quantum_predict_single(self, x: np.ndarray) -> float:
-        """
-         Predict ⟨Z⟩ for a single sample using the pure quantum circuit.
-
-        Args:
-            x: input sample (any size, will be preprocessed)
-
-        Returns:
-            float: expectation value of the readout qubit.
-        """
-        x_processed = self._preprocess_input(x)
+        x_processed = self._preprocess_input(np.array([x]))[0]
         flat_params = self._flatten_params(self.quantum_params)
-        return self.quantum_circuit(x_processed, flat_params)
+        return float(self.quantum_circuit(x_processed, flat_params))
 
     def quantum_predict_batch(self, X: np.ndarray) -> np.ndarray:
-        """
-        Batch quantum prediction with {-1,1} output encoding.
-        Vectorized to directly leverage PennyLane's parameter broadcasting.
-
-        Args:
-            X: array of samples
-
-        Returns:
-            numpy array of binary predictions.
-        """
+        # FIX: loop sample-by-sample — AmplitudeEmbedding doesn't support
+        # batched input with MottonenStatePreparation in PennyLane 0.38
         X_processed = self._preprocess_input(X)
         flat_params = self._flatten_params(self.quantum_params)
-        
-        quantum_outputs = self.quantum_circuit(X_processed, flat_params)
-        # Ensure it's an iterable array if single element prediction
-        quantum_outputs = pnp.atleast_1d(quantum_outputs)
-        
-        predictions = np.where(quantum_outputs > 0, 1, -1)
-        return predictions
+        outputs = np.array([
+            float(self.quantum_circuit(X_processed[i], flat_params))
+            for i in range(len(X_processed))
+        ])
+        return np.where(outputs > 0, 1, -1)
 
     def quantum_loss_function(self, X_batch: np.ndarray, y_batch: np.ndarray) -> float:
-        """
-        Computes pure quantum MSE loss.
-        Evaluated entirely from batched quantum predictions.
-
-        Args:
-            X_batch: minibatch of samples
-            y_batch: target labels in {-1,1}
-
-        Returns:
-            scalar loss value
-        """
+        # FIX: loop sample-by-sample for same reason as predict_batch
         X_processed = self._preprocess_input(X_batch)
         flat_params = self._flatten_params(self.quantum_params)
-        
-        quantum_predictions = self.quantum_circuit(X_processed, flat_params)
-        quantum_predictions = pnp.atleast_1d(quantum_predictions)
+        preds = pnp.array([
+            self.quantum_circuit(pnp.array(X_processed[i]), flat_params)
+            for i in range(len(X_processed))
+        ])
         y_batch = pnp.array(y_batch)
-
-        quantum_loss = pnp.mean((quantum_predictions - y_batch) ** 2)
-
-        return quantum_loss
+        return pnp.mean((preds - y_batch) ** 2)
