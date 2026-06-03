@@ -442,6 +442,19 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         plt.tight_layout()
         plt.savefig(graph_path, dpi=150, bbox_inches='tight')
         print(f"\n Training plots saved as '{graph_path}'")
+
+        try:
+            from noise_sim import run_noise_simulation
+            print("\n Running noise robustness simulation (this may take a few minutes)...")
+            run_noise_simulation(
+                weights_path="Results/Weights/quantum_model_params.npz",
+                output_path="Results/Graphs/fig6_noise_robustness_real.png",
+                image_size=config.image_size,
+                classes=tuple(config.classes)
+            )
+        except Exception as noise_e:
+            print(f"\n  Warning: Noise simulation failed: {noise_e}")
+
     except Exception as e:
         print(f"\n  Plotting failed: {e}")
 
