@@ -1,9 +1,9 @@
 """
 noise_sim.py — Depolarizing noise robustness experiment for FQCNN
 
-Loads MNIST directly (no .npz files), preprocesses with amplitude embedding at
-the configured image_size, derives the circuit qubit count from the saved weights,
-then sweeps depolarizing noise p across [0, 0.20] and plots experimental vs theoretical.
+Loads MNIST directly, preprocesses with amplitude embedding at the configured
+image_size, derives the circuit qubit count from the saved weights, then sweeps
+depolarizing noise p across [0, 0.20] and plots experimental vs theoretical.
 
 Standalone:   python noise_sim.py
 Programmatic: from noise_sim import run_noise_simulation
@@ -46,12 +46,10 @@ def _load_mnist(n_samples, classes, image_size):
     else:
         X_raw, y_raw = _fetch_openml_mnist()
 
-    # Filter for the two classes
     mask = (y_raw == classes[0]) | (y_raw == classes[1])
     X_raw, y_raw = X_raw[mask], y_raw[mask]
     print(f"  After class filter ({classes}): {len(X_raw)} samples")
 
-    # Stratified cap to n_samples
     if len(X_raw) > n_samples:
         idx0 = np.where(y_raw == classes[0])[0]
         idx1 = np.where(y_raw == classes[1])[0]
@@ -65,7 +63,6 @@ def _load_mnist(n_samples, classes, image_size):
         X_raw, y_raw = X_raw[chosen], y_raw[chosen]
     print(f"  Using {len(X_raw)} samples (capped to {n_samples})")
 
-    # Apply the same preprocessing as training: resize to image_size², normalize [0,1], labels → {-1,+1}
     X, y = preprocess_for_quantum(
         X_raw, y_raw,
         n_qubits=math.ceil(math.log2(max(image_size * image_size, 2))),
@@ -116,6 +113,7 @@ def _unflatten_params(flat, n_conv, n_pool, n_qubits):
     for i in range(n_conv):
         params[f'quantum_conv_kernel_{i}'] = flat[idx:idx + kernel_size].reshape(4, 4, 3)
         idx += kernel_size
+    # FIX 3: pool_size uses actual n_qubits, not inferred from weight shape
     pool_size = 3 * (n_qubits // 2)
     for i in range(n_pool):
         params[f'quantum_pooling_{i}'] = flat[idx:idx + pool_size]
@@ -212,17 +210,6 @@ def run_noise_simulation(
     n_samples=8000,
     classes=(0, 1)
 ):
-    """
-    Load MNIST, reproduce the training split, then sweep depolarizing noise.
-
-    Args:
-        weights_path:  Path to quantum_model_params.npz
-        output_path:   Where to save the figure
-        mnist_path:    Optional path to MNIST IDX directory; uses sklearn cache otherwise
-        image_size:    Image width/height (default 28 for full MNIST)
-        n_samples:     Total samples to load before splitting (default 8000)
-        classes:       Two MNIST digit classes for binary classification (default (0,1))
-    """
     np.random.seed(42)
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -234,17 +221,17 @@ def run_noise_simulation(
 
     n_conv = len([k for k in w.keys() if 'conv_kernel' in k])
     n_pool = len([k for k in w.keys() if 'pooling' in k])
-    # Derive n_qubits from saved pooling shape (pool_size = 3 * (n_qubits // 2))
-    n_qubits = 2 * (w['quantum_pooling_0'].size // 3)
+
+    # FIX 3: infer n_qubits from image_size, not from pooling weight shape
+    # n_qubits = ceil(log2(image_size^2)), padded to power of 2
+    n_features = image_size * image_size
+    n_qubits = math.ceil(math.log2(max(n_features, 2)))
     target_len = 2 ** n_qubits
     print(f"\nInferred: {n_conv} conv layers, {n_pool} pool layers, {n_qubits} qubits (target_len={target_len})")
 
     # ── dataset ───────────────────────────────────────────────────────────────
     print(f"\nLoading MNIST (image_size={image_size}, {n_samples} samples, classes={classes})...")
     if mnist_path:
-        # Allow override from caller
-        original_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'datasets', 'MNIST')
-        # Temporarily point the helper at the provided path by patching — simplest: just call directly
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from QCNN.utils.data_preprocessing import preprocess_for_quantum
         from QCNN.utils.dataset_loader import load_idx_dataset
@@ -272,7 +259,7 @@ def run_noise_simulation(
             X_raw, y_raw = X_raw[chosen], y_raw[chosen]
         X_all, y_all = preprocess_for_quantum(
             X_raw, y_raw,
-            n_qubits=math.ceil(math.log2(max(image_size * image_size, 2))),
+            n_qubits=n_qubits,
             image_size=image_size,
             normalization='minmax',
             encoding_type='amplitude'
@@ -282,7 +269,7 @@ def run_noise_simulation(
 
     print(f"  Preprocessed shape: {X_all.shape}")
 
-    # ── test split (matches training's 70/30 seed=42 split) ──────────────────
+    # 70/30 split matching training exactly
     _, X_test, _, y_test = train_test_split(
         X_all, y_all, test_size=0.3, random_state=42, stratify=y_all
     )
@@ -290,18 +277,18 @@ def run_noise_simulation(
 
     MAX_TEST = 200
     if len(X_test) > MAX_TEST:
-        idx = np.random.choice(len(X_test), MAX_TEST, replace=False)
-        X_test, y_test = X_test[idx], y_test[idx]
+        rng_idx = np.random.choice(len(X_test), MAX_TEST, replace=False)
+        X_test, y_test = X_test[rng_idx], y_test[rng_idx]
     print(f"  Using {len(X_test)} test samples for noise sweep")
 
-    # ── pad + unit-norm for amplitude encoding ────────────────────────────────
     X_test_proc = _preprocess_for_circuit(X_test, target_len)
     flat_params  = _flatten_weights(w, n_conv, n_pool)
     print(f"  Flat params: {len(flat_params)}")
 
     # ── noise sweep ───────────────────────────────────────────────────────────
-    p_values = [0.00, 0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.13, 0.15, 0.20]
+    p_values  = [0.00, 0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.13, 0.15, 0.20]
     real_accs = []
+    threshold = None  # calibrated once at p=0
 
     print("\nRunning noise sweep...")
     print(f"  {'p':>6}  {'accuracy':>10}  {'theoretical':>12}")
@@ -309,31 +296,51 @@ def run_noise_simulation(
 
     for p in p_values:
         circuit = _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, p)
-        preds = np.array([1 if float(circuit(xi)) > 0 else -1 for xi in X_test_proc])
-        acc = float(np.mean(preds == y_test))
+        raw_outputs = np.array([float(circuit(xi)) for xi in X_test_proc])
+
+        # FIX 1: calibrate threshold once at p=0 using midpoint of class means
+        if p == 0.00:
+            class_pos_mean = float(np.mean(raw_outputs[y_test == 1]))
+            class_neg_mean = float(np.mean(raw_outputs[y_test == -1]))
+            threshold = (class_pos_mean + class_neg_mean) / 2.0
+            print(f"  Calibrated threshold: {threshold:.4f}  "
+                  f"(class+1 mean={class_pos_mean:.4f}, class-1 mean={class_neg_mean:.4f})")
+
+        preds = np.where(raw_outputs > threshold, 1, -1)
+        acc   = float(np.mean(preds == y_test))
         real_accs.append(acc)
         print(f"  p={p:.2f}  acc={acc:.4f}  theoretical={(1 - p) * 0.945:.4f}")
 
     # ── plot ──────────────────────────────────────────────────────────────────
     theo_accs = [(1 - p) * 0.945 for p in p_values]
 
+    # FIX 2: dynamic ylim so the real curve is always visible
+    y_min = min(min(real_accs), min(theo_accs)) - 0.05
+    y_min = max(0.40, round(y_min, 1))  # floor at 0.40, snap to 1dp
+
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(p_values, theo_accs, 'b--o', label='Theoretical: acc(p) = (1-p) x 0.945',
+    ax.plot(p_values, theo_accs, 'b--o',
+            label='Theoretical: acc(p) = (1-p) \u00d7 0.945',
             linewidth=2, markersize=6)
-    ax.plot(p_values, real_accs, 'r-s', label='Experimental (depolarizing noise)',
+    ax.plot(p_values, real_accs, 'r-s',
+            label='Experimental (depolarizing noise)',
             linewidth=2, markersize=7)
-    ax.axvline(x=0.05, color='gray', linestyle=':', linewidth=1.5, label='NISQ threshold (p=0.05)')
+    ax.axvline(x=0.05, color='gray', linestyle=':', linewidth=1.5,
+               label='NISQ threshold (p=0.05)')
     ax.set_xlabel('Depolarizing noise probability p', fontsize=12)
     ax.set_ylabel('Test accuracy', fontsize=12)
     ax.set_title('FQCNN Noise Robustness: Experimental vs Theoretical', fontsize=13)
     ax.legend(fontsize=10)
     ax.set_xlim(-0.005, 0.21)
-    ax.set_ylim(0.70, 1.00)
+    ax.set_ylim(y_min, 1.00)
     ax.grid(True, alpha=0.3)
 
+    # FIX 4: safe float comparison for annotations
+    annotate_at = [0.00, 0.05, 0.10, 0.20]
     for p, acc in zip(p_values, real_accs):
-        if p in [0.00, 0.05, 0.10, 0.20]:
-            ax.annotate(f'{acc:.3f}', xy=(p, acc), xytext=(p + 0.005, acc + 0.008),
+        if any(abs(p - a) < 1e-9 for a in annotate_at):
+            ax.annotate(f'{acc:.3f}', xy=(p, acc),
+                        xytext=(p + 0.005, acc + 0.008),
                         fontsize=9, color='darkred')
 
     plt.tight_layout()
@@ -342,7 +349,7 @@ def run_noise_simulation(
     print(f"\nFigure saved to: {output_path}")
 
     print("\n-- Summary ----------------------------------------------------------")
-    idx05 = p_values.index(0.05)
+    idx05 = next(i for i, p in enumerate(p_values) if abs(p - 0.05) < 1e-9)
     print(f"  Baseline (p=0):      real={real_accs[0]:.4f}  theoretical={theo_accs[0]:.4f}")
     print(f"  NISQ (p=0.05):       real={real_accs[idx05]:.4f}  theoretical={theo_accs[idx05]:.4f}")
     print(f"  High noise (p=0.20): real={real_accs[-1]:.4f}  theoretical={theo_accs[-1]:.4f}")
