@@ -1,9 +1,12 @@
 """
 noise_sim.py — Depolarizing noise robustness experiment for FQCNN
 
-Loads MNIST directly, preprocesses with amplitude embedding at the configured
-image_size, derives the circuit qubit count from the saved weights, then sweeps
-depolarizing noise p across [0, 0.20] and plots experimental vs theoretical.
+The model was trained with patch (quanvolutional) encoding, so this evaluates the
+trained weights on the REAL 196-dim quanvolutional features of the reconstructed
+test set (not raw pixels). It reconstructs the exact training test split (seed-42
+pipeline) to recover aligned labels, reuses the cached quanv features (with an
+alignment guard), derives the circuit qubit count from the saved weights, then
+sweeps depolarizing noise p across [0, 0.20] and plots experimental vs theoretical.
 
 Standalone:   python noise_sim.py
 Programmatic: from noise_sim import run_noise_simulation
@@ -20,64 +23,97 @@ from sklearn.model_selection import train_test_split
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _load_mnist(n_samples, classes, image_size):
+def _find_mnist_idx(mnist_dir):
+    """Locate the MNIST train IDX image/label files in a directory."""
+    if not os.path.isdir(mnist_dir):
+        return None, None
+    files = os.listdir(mnist_dir)
+    images_f = next((f for f in files if 'train' in f and 'images' in f and 'idx3' in f), None)
+    labels_f = next((f for f in files if 'train' in f and 'labels' in f and 'idx1' in f), None)
+    if not images_f or not labels_f:
+        return None, None
+    return os.path.join(mnist_dir, images_f), os.path.join(mnist_dir, labels_f)
+
+
+def _reconstruct_training_split(image_size, classes, n_samples, mnist_path=None):
     """
-    Load MNIST for binary classification.
-    Returns X (N, image_size²) normalized to [0,1] and y in {-1, +1}.
-    Tries IDX files at datasets/MNIST/ first, falls back to sklearn.
+    Reproduce the EXACT data pipeline from main.py so the recovered test images and
+    labels line up with the trained model (and with the cached quanv features).
+
+    Mirrors: load IDX → filter classes → preprocess_for_quantum(patch) →
+    seed-42 stratified downsample to n_samples/0.7 → train_test_split(random_state=42).
+
+    Returns (X_test_img, y_test): normalized (image_size x image_size) test images
+    and labels in {-1, +1}, in the same order the trainer saw them.
     """
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from QCNN.utils.dataset_loader import load_idx_dataset
     from QCNN.utils.data_preprocessing import preprocess_for_quantum
 
-    mnist_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'datasets', 'MNIST')
-    if os.path.isdir(mnist_dir) and any('idx3' in f for f in os.listdir(mnist_dir)):
-        from QCNN.utils.dataset_loader import load_idx_dataset
-        files = os.listdir(mnist_dir)
-        images_f = next((f for f in files if 'train' in f and 'images' in f and 'idx3' in f), None)
-        labels_f = next((f for f in files if 'train' in f and 'labels' in f and 'idx1' in f), None)
-        if images_f and labels_f:
-            print(f"  Loading MNIST IDX from {mnist_dir}/")
-            X_raw, y_raw = load_idx_dataset(
-                os.path.join(mnist_dir, images_f),
-                os.path.join(mnist_dir, labels_f)
-            )
-        else:
-            X_raw, y_raw = _fetch_openml_mnist()
-    else:
-        X_raw, y_raw = _fetch_openml_mnist()
+    here = os.path.dirname(os.path.abspath(__file__))
+    mnist_dir = mnist_path or os.path.join(here, 'datasets', 'MNIST')
+    images_f, labels_f = _find_mnist_idx(mnist_dir)
+    if images_f is None:
+        raise FileNotFoundError(f"No MNIST IDX files found in {mnist_dir}")
 
+    print(f"  Loading MNIST IDX from {mnist_dir}/")
+    X_raw, y_raw = load_idx_dataset(images_f, labels_f)
     mask = (y_raw == classes[0]) | (y_raw == classes[1])
     X_raw, y_raw = X_raw[mask], y_raw[mask]
-    print(f"  After class filter ({classes}): {len(X_raw)} samples")
+    print(f"  After class filter {classes}: {len(X_raw)} samples")
 
-    if len(X_raw) > n_samples:
-        idx0 = np.where(y_raw == classes[0])[0]
-        idx1 = np.where(y_raw == classes[1])[0]
-        n0 = min(len(idx0), n_samples // 2)
-        n1 = min(len(idx1), n_samples - n0)
-        chosen = np.concatenate([
-            np.random.choice(idx0, n0, replace=False),
-            np.random.choice(idx1, n1, replace=False)
-        ])
-        np.random.shuffle(chosen)
-        X_raw, y_raw = X_raw[chosen], y_raw[chosen]
-    print(f"  Using {len(X_raw)} samples (capped to {n_samples})")
-
-    X, y = preprocess_for_quantum(
+    # patch-mode preprocessing keeps 2D image structure (exactly as in training)
+    X_pp, y_pp = preprocess_for_quantum(
         X_raw, y_raw,
-        n_qubits=math.ceil(math.log2(max(image_size * image_size, 2))),
+        n_qubits=int(math.ceil(math.log2(max(image_size * image_size, 2)))),
         image_size=image_size,
         normalization='minmax',
-        encoding_type='amplitude'
+        encoding_type='patch',
     )
-    return X, y
+
+    # stratified downsample to total_needed = n_samples / 0.7 (mirrors main.py:153-181).
+    # main.py relies on the module-level np.random.seed(42) being pristine here, so we
+    # re-seed to reproduce the identical choice()/shuffle() draw.
+    total_needed = int(n_samples / 0.7)
+    if total_needed < len(X_pp):
+        np.random.seed(42)
+        idx_pos = np.where(y_pp == 1)[0]
+        idx_neg = np.where(y_pp == -1)[0]
+        n_pos = min(len(idx_pos), total_needed // 2)
+        n_neg = min(len(idx_neg), total_needed - total_needed // 2)
+        sampled_pos = np.random.choice(idx_pos, n_pos, replace=False)
+        sampled_neg = np.random.choice(idx_neg, n_neg, replace=False)
+        indices = np.concatenate([sampled_pos, sampled_neg])
+        np.random.shuffle(indices)
+        X_pp, y_pp = X_pp[indices], y_pp[indices]
+        print(f"  Stratified downsample to {len(X_pp)} samples ({n_pos} pos, {n_neg} neg)")
+
+    _, X_test, _, y_test = train_test_split(
+        X_pp, y_pp, test_size=0.3, random_state=42, stratify=y_pp
+    )
+    print(f"  Reconstructed test split: {len(X_test)} samples")
+    return X_test, y_test
 
 
-def _fetch_openml_mnist():
-    from sklearn.datasets import fetch_openml
-    print("  Fetching MNIST via sklearn (cached after first download)...")
-    mnist = fetch_openml('mnist_784', version=1, parser='liac-arff', as_frame=False)
-    return mnist.data.astype(np.float64), mnist.target.astype(int)
+def _resolve_cached_features(cache_dir, n_test_expected, n_feat_expected):
+    """Return the cached X_test feature matrix matching the expected shape, or None."""
+    if not os.path.isdir(cache_dir):
+        return None
+    for fname in sorted(os.listdir(cache_dir)):
+        if not fname.startswith('quanv_cache_') or not fname.endswith('.npz'):
+            continue
+        data = np.load(os.path.join(cache_dir, fname))
+        if 'X_test' in data and data['X_test'].shape == (n_test_expected, n_feat_expected):
+            print(f"  Found matching quanv cache: {fname}  X_test={data['X_test'].shape}")
+            return data['X_test']
+    return None
+
+
+def _quanv_features_for(images, seed=42):
+    """Compute quanvolutional features for a batch of images (training config)."""
+    from QCNN.layers.QuanvLayer import QuanvolutionalLayer
+    quanv = QuanvolutionalLayer(patch_size=4, n_filters=4, stride=4, seed=seed)
+    return np.array([quanv.process_image(img) for img in images])
 
 
 def _preprocess_for_circuit(X, target_len):
@@ -208,7 +244,8 @@ def run_noise_simulation(
     mnist_path=None,
     image_size=28,
     n_samples=8000,
-    classes=(0, 1)
+    classes=(0, 1),
+    max_test=200
 ):
     np.random.seed(42)
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -222,66 +259,53 @@ def run_noise_simulation(
     n_conv = len([k for k in w.keys() if 'conv_kernel' in k])
     n_pool = len([k for k in w.keys() if 'pooling' in k])
 
-    # FIX 3: infer n_qubits from image_size, not from pooling weight shape
-    # n_qubits = ceil(log2(image_size^2)), padded to power of 2
-    n_features = image_size * image_size
-    n_qubits = math.ceil(math.log2(max(n_features, 2)))
+    # Derive n_qubits from the saved pooling weights (pool_size = 3 * (n_qubits // 2)).
+    # The trained model uses 8 qubits regardless of image_size, because patch encoding
+    # reduces the image to a fixed-length quanvolutional feature vector first.
+    n_qubits = 2 * (w['quantum_pooling_0'].size // 3)
     target_len = 2 ** n_qubits
     print(f"\nInferred: {n_conv} conv layers, {n_pool} pool layers, {n_qubits} qubits (target_len={target_len})")
 
-    # ── dataset ───────────────────────────────────────────────────────────────
-    print(f"\nLoading MNIST (image_size={image_size}, {n_samples} samples, classes={classes})...")
-    if mnist_path:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from QCNN.utils.data_preprocessing import preprocess_for_quantum
-        from QCNN.utils.dataset_loader import load_idx_dataset
-        files = os.listdir(mnist_path)
-        images_f = next((f for f in files if 'train' in f and 'images' in f and 'idx3' in f), None)
-        labels_f = next((f for f in files if 'train' in f and 'labels' in f and 'idx1' in f), None)
-        if not images_f or not labels_f:
-            raise FileNotFoundError(f"No MNIST IDX files found in {mnist_path}")
-        X_raw, y_raw = load_idx_dataset(
-            os.path.join(mnist_path, images_f),
-            os.path.join(mnist_path, labels_f)
-        )
-        mask = (y_raw == classes[0]) | (y_raw == classes[1])
-        X_raw, y_raw = X_raw[mask], y_raw[mask]
-        if len(X_raw) > n_samples:
-            idx0 = np.where(y_raw == classes[0])[0]
-            idx1 = np.where(y_raw == classes[1])[0]
-            n0 = min(len(idx0), n_samples // 2)
-            n1 = min(len(idx1), n_samples - n0)
-            chosen = np.concatenate([
-                np.random.choice(idx0, n0, replace=False),
-                np.random.choice(idx1, n1, replace=False)
-            ])
-            np.random.shuffle(chosen)
-            X_raw, y_raw = X_raw[chosen], y_raw[chosen]
-        X_all, y_all = preprocess_for_quantum(
-            X_raw, y_raw,
-            n_qubits=n_qubits,
-            image_size=image_size,
-            normalization='minmax',
-            encoding_type='amplitude'
-        )
+    # ── reconstruct the REAL test set (images + aligned labels) ─────────────────
+    print(f"\nReconstructing the trained test set (image_size={image_size}, "
+          f"n_samples={n_samples}, classes={classes})...")
+    X_test_img, y_test = _reconstruct_training_split(image_size, classes, n_samples, mnist_path)
+
+    out_dim = (image_size - 4) // 4 + 1  # patch_size=4, stride=4
+    n_feat = out_dim * out_dim * 4       # quanv output features (4 filters) → 196 for 28x28
+
+    # ── obtain the quanvolutional features for the test set (matching training) ─
+    # The model was trained on these features, NOT raw pixels. Prefer the cached
+    # features written during training; verify alignment before trusting them.
+    cache_dir = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(weights_path)), '..', 'Cache'))
+    cached = _resolve_cached_features(cache_dir, len(X_test_img), n_feat)
+    if cached is not None:
+        check = _quanv_features_for(X_test_img[:5])
+        if np.allclose(check, cached[:5], atol=1e-6):
+            print("  Alignment guard PASSED — using cached quanvolutional features.")
+        else:
+            print("  Alignment guard FAILED — will recompute quanv for the evaluated subset.")
+            cached = None
+
+    # ── pick the evaluation subset ──────────────────────────────────────────────
+    np.random.seed(123)  # reproducible subset selection, independent of pipeline RNG
+    if max_test is not None and len(X_test_img) > max_test:
+        sub = np.random.choice(len(X_test_img), max_test, replace=False)
     else:
-        X_all, y_all = _load_mnist(n_samples, classes, image_size)
+        sub = np.arange(len(X_test_img))
+    y_test = y_test[sub]
 
-    print(f"  Preprocessed shape: {X_all.shape}")
+    if cached is not None:
+        X_feat = cached[sub]
+    else:
+        print(f"  Computing quanvolutional features for {len(sub)} test images...")
+        X_feat = _quanv_features_for(X_test_img[sub])
+    print(f"  Evaluating on {len(sub)} real test samples ({X_feat.shape[1]}-dim features)")
 
-    # 70/30 split matching training exactly
-    _, X_test, _, y_test = train_test_split(
-        X_all, y_all, test_size=0.3, random_state=42, stratify=y_all
-    )
-    print(f"  Test split: {len(X_test)} samples")
-
-    MAX_TEST = 200
-    if len(X_test) > MAX_TEST:
-        rng_idx = np.random.choice(len(X_test), MAX_TEST, replace=False)
-        X_test, y_test = X_test[rng_idx], y_test[rng_idx]
-    print(f"  Using {len(X_test)} test samples for noise sweep")
-
-    X_test_proc = _preprocess_for_circuit(X_test, target_len)
+    # Model pads 196→256 then AmplitudeEmbedding(normalize=True); _preprocess_for_circuit
+    # reproduces that (pad to 2^n_qubits + unit-norm).
+    X_test_proc = _preprocess_for_circuit(X_feat, target_len)
     flat_params  = _flatten_weights(w, n_conv, n_pool)
     print(f"  Flat params: {len(flat_params)}")
 
