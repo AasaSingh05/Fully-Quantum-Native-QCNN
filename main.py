@@ -55,13 +55,29 @@ from QCNN.training.Qtrainer import QuantumNativeTrainer
 from QCNN.utils.dataset_generator import generate_quantum_binary_dataset
 from QCNN.utils.dataset_loader import load_dataset
 from QCNN.utils.metadata_logger import save_metadata
+from QCNN.utils.metrics import (
+    predict_raw_outputs,
+    compute_classification_metrics,
+    save_metrics_json,
+)
+
+
+def _seed_everything(seed: int):
+    """Set every RNG used in the pipeline for reproducible / multi-seed runs."""
+    np.random.seed(seed)
+    random.seed(seed)
+    try:
+        import pennylane as _qml
+        _qml.set_seed(seed)
+    except Exception:
+        pass
 
     # Note: No top-level prints here to avoid clutter in multiprocess workers
 
 
 def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='synthetic', 
          encoding='feature_map', image_size=None, log_file="training_log.txt", summary_log_file="training_summary.txt",
-         learning_rate=None, classes=None, epochs=None, batch_size=None):
+         learning_rate=None, classes=None, epochs=None, batch_size=None, seed=42):
     """Main execution function
     
     Args:
@@ -89,6 +105,8 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
         image_size = 4 if dataset_type == 'synthetic' else 16 # Default 16 for MNIST to enable amplitude encoding
     
     config = QuantumNativeConfig.from_image_size(image_size, encoding)
+    config.seed = seed
+    _seed_everything(seed)
     if learning_rate is not None:
         config.learning_rate = learning_rate
     
@@ -213,7 +231,7 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
 
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
-        X_quantum, y_quantum, test_size=0.3, random_state=42, stratify=y_quantum
+        X_quantum, y_quantum, test_size=0.3, random_state=config.seed, stratify=y_quantum
     )
 
     # Limit training samples if train_sample_size parameter set
@@ -264,50 +282,42 @@ def main(train_sample_size=None, use_bce=True, dataset_path=None, dataset_type='
             X_eval = X_test
             y_eval = y_test
 
-    predictions = trained_model.quantum_predict_batch(X_eval)
-    accuracy = np.mean(predictions == y_eval)
+    # Continuous circuit outputs → full metric suite (shared with the experiment runner).
+    raw_outputs = predict_raw_outputs(trained_model, X_eval, already_preprocessed=False)
+    metrics = compute_classification_metrics(y_eval, raw_outputs)
+
+    accuracy = metrics['accuracy']
+    predictions = metrics['predictions']
+    prob_scores = metrics['prob_scores']
+    tp, tn, fp, fn = metrics['tp'], metrics['tn'], metrics['fp'], metrics['fn']
+    precision, recall, f1 = metrics['precision'], metrics['recall'], metrics['f1']
+    prediction_bias = metrics['prediction_bias']
+    prediction_variance = metrics['prediction_variance']
+    y_test_bin = np.where(y_eval == 1, 1, 0)
+
     print(f" Final Quantum Accuracy: {accuracy:.1%}")
-
-    # Confusion matrix
-    tp = np.sum((predictions == 1) & (y_test == 1))
-    tn = np.sum((predictions == -1) & (y_test == -1))
-    fp = np.sum((predictions == 1) & (y_test == -1))
-    fn = np.sum((predictions == -1) & (y_test == 1))
-
     print(f"\n Quantum Confusion Matrix:")
     print(f"   True Positives: {tp}")
     print(f"   True Negatives: {tn}")
-    # Calculate continuous probabilities for Bias, Variance, ROC, and PR curves
-    raw_outputs = []
-    for xi in X_eval:
-         out = trained_model.quantum_circuit(trained_model._preprocess_input(np.array([xi])), trained_model._flatten_params(trained_model.quantum_params))
-         raw_outputs.append(float(np.squeeze(out)))
-    raw_outputs = np.array(raw_outputs)
-    # Normalize continuous outputs to [0, 1] for metrics and curves
-    prob_scores = (raw_outputs - raw_outputs.min()) / (raw_outputs.max() - raw_outputs.min() + 1e-8)
-
-    # Evaluation Metrics
-    # Map predictions from [-1, 1] to [0, 1] for sklearn metrics
-    y_test_bin = np.where(y_test == 1, 1, 0)
-    preds_bin = np.where(predictions == 1, 1, 0)
-    
-    precision = precision_score(y_test_bin, preds_bin, zero_division=0)
-    recall = recall_score(y_test_bin, preds_bin, zero_division=0)
-    f1 = f1_score(y_test_bin, preds_bin, zero_division=0)
-    
-    # Calculate Prediction Bias and Variance
-    prediction_bias = np.mean(prob_scores) - np.mean(y_test_bin)
-    prediction_variance = np.var(prob_scores)
-
     print(f"\n Evaluation Metrics:")
     print(f"   Sensitivity (Recall): {recall:.3f}")
     print(f"   Precision: {precision:.3f}")
     print(f"   F1 Score: {f1:.3f}")
+    print(f"   ROC-AUC: {metrics['roc_auc']:.3f}")
+    print(f"   PR-AUC: {metrics['pr_auc']:.3f}")
     print(f"   Prediction Bias: {prediction_bias:.4f}")
     print(f"   Prediction Variance: {prediction_variance:.4f}")
 
+    # Persist the metric suite as JSON for downstream aggregation / reporting.
+    try:
+        save_metrics_json(metrics, os.path.join("Results", "metrics.json"))
+    except Exception as _me:
+        print(f"  Warning: could not save metrics.json: {_me}")
+
     # Plot training history and save graphs
     try:
+        from QCNN.utils.plotstyle import apply_paper_style
+        apply_paper_style()
         graphs_dir = os.path.join('Results', 'Graphs')
         
         # Save confusion matrix
@@ -498,7 +508,9 @@ if __name__ == "__main__":
                        help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=None,
                        help='Batch size for training')
-    
+    parser.add_argument('--seed', type=int, default=42,
+                       help='Random seed for reproducibility (default: 42)')
+
     args = parser.parse_args()
     
     try:
@@ -520,6 +532,7 @@ if __name__ == "__main__":
             classes=tuple(args.classes) if args.classes else None,
             epochs=args.epochs,
             batch_size=args.batch_size,
+            seed=args.seed,
         )
         
         if not args.no_profile:

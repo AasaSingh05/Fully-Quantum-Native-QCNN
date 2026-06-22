@@ -46,11 +46,15 @@ class PureQuantumNativeCNN:
         self.training_history = {'loss': [], 'accuracy': [], 'epoch_times': []}
 
     def _initialize_quantum_parameters(self) -> dict[str, pnp.ndarray]:
-        pnp.random.seed(42)
+        seed = getattr(self.config, 'seed', 42)
+        np.random.seed(seed)
+        pnp.random.seed(seed)
         params = {}
         init_range = np.pi / 4
         conv_depth = 4
-        kernel_shape = (4, conv_depth, 3)
+        rpq = QuantumNativeConvolution.rotations_per_qubit(
+            getattr(self.config, 'kernel_rotations', 'su2'))
+        kernel_shape = (4, conv_depth, rpq)
 
         for layer in range(self.config.n_conv_layers):
             kernel_tensor = pnp.array(
@@ -81,10 +85,12 @@ class PureQuantumNativeCNN:
         params = {}
         idx = 0
         conv_depth = 4
-        kernel_size = 4 * conv_depth * 3
+        rpq = QuantumNativeConvolution.rotations_per_qubit(
+            getattr(self.config, 'kernel_rotations', 'su2'))
+        kernel_size = 4 * conv_depth * rpq
         for layer in range(self.config.n_conv_layers):
             slice_flat = flat_params[idx:idx + kernel_size]
-            params[f'quantum_conv_kernel_{layer}'] = slice_flat.reshape(4, conv_depth, 3)
+            params[f'quantum_conv_kernel_{layer}'] = slice_flat.reshape(4, conv_depth, rpq)
             idx += kernel_size
 
         max_pairs = self.num_qubits // 2
@@ -119,10 +125,14 @@ class PureQuantumNativeCNN:
                 w, h = max(width, height), min(width, height)
                 base_windows = QuantumNativeConvolution.get_conv_windows(w, h)
                 kernel = params[f'quantum_conv_kernel_{layer}']
+                rotations = getattr(self.config, 'kernel_rotations', 'su2')
+                entanglement = getattr(self.config, 'conv_entanglement', 'full')
                 for rel_window in base_windows:
                     if max(rel_window) < n_current:
                         window_qubits = [active_qubits[i] for i in rel_window]
-                        QuantumNativeConvolution.quantum_conv2d_kernel(kernel, window_qubits)
+                        QuantumNativeConvolution.quantum_conv2d_kernel(
+                            kernel, window_qubits,
+                            rotations=rotations, entanglement=entanglement)
 
             if layer < self.config.n_conv_layers - 1:
                 n_qubits_current = len(active_qubits)
@@ -134,7 +144,8 @@ class PureQuantumNativeCNN:
                 keep = [k for (k, _) in pairs]
                 discard = [d for (_, d) in pairs]
                 pool_key = f'quantum_pooling_{layer}'
-                QuantumNativePooling.quantum_unitary_pooling(
+                QuantumNativePooling.apply_pooling(
+                    getattr(self.config, 'pooling_mode', 'unitary'),
                     params[pool_key],
                     input_qubits=keep,
                     output_qubits=discard

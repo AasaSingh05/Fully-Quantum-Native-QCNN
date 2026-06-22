@@ -8,6 +8,12 @@ from .data_preprocessing import (
     flatten_and_pad
 )
 from .metadata_logger import save_metadata
+from .metrics import (
+    predict_raw_outputs,
+    compute_classification_metrics,
+    aggregate_metrics,
+    save_metrics_json,
+)
 
 __all__ = [
     'generate_quantum_binary_dataset',
@@ -18,5 +24,9 @@ __all__ = [
     'encode_labels',
     'resize_images',
     'flatten_and_pad',
-    'save_metadata'
+    'save_metadata',
+    'predict_raw_outputs',
+    'compute_classification_metrics',
+    'aggregate_metrics',
+    'save_metrics_json',
 ]

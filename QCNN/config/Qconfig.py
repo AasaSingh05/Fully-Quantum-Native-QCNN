@@ -34,9 +34,30 @@ class QuantumNativeConfig:
         #   patch        – quanvolutional preprocessing then QCNN on reduced map
         self.encoding_type = 'amplitude'  # Captures full image details efficiently
         
-        # Pure quantum architecture parameters  
+        # Pure quantum architecture parameters
         self.n_conv_layers = 4
         self.kernel_size = 2  # 2x2 quantum kernels
+
+        # ------------------------------------------------------------------
+        # Ablation toggles (suggestion #4). Defaults reproduce the paper's
+        # proposed architecture; alternatives let each component be switched
+        # off / swapped to measure its contribution.
+        # ------------------------------------------------------------------
+        # Convolution kernel rotation set per qubit:
+        #   'su2' – RX, RY, RZ (proposed, 3 params/qubit)
+        #   'ry'  – RY only (1 param/qubit, tests SU(2) expressivity claim)
+        self.kernel_rotations = 'su2'
+        # Intra-window entanglement pattern:
+        #   'full'         – 4 edges + both diagonals (current code, 6 CNOTs)
+        #   'one_diagonal' – 4 edges + one diagonal (5 CNOTs, paper-faithful)
+        #   'none'         – no entanglement (tests entanglement design claim)
+        self.conv_entanglement = 'full'
+        # Pooling mechanism:
+        #   'unitary'     – coherence-preserving CRY/CRZ pooling (proposed)
+        #   'none'        – drop qubits with no info-transfer unitary
+        #   'measurement' – mid-circuit measurement pooling (breaks coherence,
+        #                   models prior measurement-based QCNNs)
+        self.pooling_mode = 'unitary'
         
         # Quanvolutional layer parameters (used when encoding_type == 'patch')
         self.patch_size = 4        # Patch width/height for quanvolutional filter
@@ -52,8 +73,12 @@ class QuantumNativeConfig:
         self.lr_plateau_factor = 0.5      # Multiply LR by this factor on plateau
         self.ema_decay = 0.99             # Decay for Exponential Moving Average
         
+        # Random seed for reproducibility / multi-run experiments (suggestion #5).
+        # Threaded into numpy, random, PennyLane, the data split, and parameter init.
+        self.seed = 42
+
         # Quantum device
-        self.device = 'lightning.qubit'  
+        self.device = 'lightning.qubit'
         self.shots = None  # Exact quantum simulation
     
     def configure_for_image(self, image_size: int, encoding: str = 'auto'):

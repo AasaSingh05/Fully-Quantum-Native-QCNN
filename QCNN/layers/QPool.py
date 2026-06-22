@@ -85,6 +85,59 @@ class QuantumNativePooling:
         # After this, the model should drop 'output_qubits' from the active set to downsample by half.
 
     @staticmethod
+    def apply_pooling(mode: str, params: np.ndarray, input_qubits: list[int],
+                      output_qubits: list[int]) -> None:
+        """
+        Dispatch to a pooling implementation based on the ablation ``mode``.
+
+        Modes (suggestion #4):
+        - 'unitary'     : coherence-preserving CRY/CRZ pooling (proposed).
+        - 'none'        : no information-transfer unitary; the model simply drops
+                          the ``output_qubits`` from the active set afterwards.
+        - 'measurement' : mid-circuit measurement of each discarded qubit with a
+                          classically-conditioned correction on the kept qubit.
+                          Collapses the state — models prior measurement-based
+                          QCNNs and serves as the "breaks coherence" baseline.
+
+        Args:
+            mode: pooling mode string.
+            params: trainable pooling angles (used by 'unitary' and 'measurement').
+            input_qubits: qubits to keep.
+            output_qubits: qubits to discard.
+        """
+        if mode == 'unitary':
+            QuantumNativePooling.quantum_unitary_pooling(params, input_qubits, output_qubits)
+        elif mode == 'none':
+            return
+        elif mode == 'measurement':
+            QuantumNativePooling.quantum_conditional_pooling(params, input_qubits, output_qubits)
+        else:
+            raise ValueError(f"Unknown pooling_mode '{mode}'. "
+                             "Use 'unitary', 'none', or 'measurement'.")
+
+    @staticmethod
+    def quantum_conditional_pooling(params: np.ndarray, input_qubits: list[int],
+                                    output_qubits: list[int]) -> None:
+        """
+        Measurement-based pooling: measure each discarded qubit mid-circuit and
+        apply a classically-conditioned RY on the kept qubit. This deliberately
+        collapses the quantum state (no coherence preservation) and exists only
+        as the ablation comparison to the proposed unitary pooling.
+        """
+        angles = pnp.asarray(params).reshape(-1)
+        if angles.size == 0:
+            return
+        n_pairs = min(len(input_qubits), len(output_qubits))
+        for i in range(n_pairs):
+            keep = input_qubits[i]
+            discard = output_qubits[i]
+            if keep == discard:
+                continue
+            angle = angles[(3 * i) % angles.size]
+            m = qml.measure(discard)
+            qml.cond(m, qml.RY)(angle, wires=keep)
+
+    @staticmethod
     def make_pairing(active_wires: list[int]) -> list[tuple[int, int]]:
         """
         Default pairing strategy for pooling.

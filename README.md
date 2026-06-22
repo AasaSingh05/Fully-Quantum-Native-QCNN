@@ -103,6 +103,67 @@ This generates comparisons between raw images and their quantum-encoded counterp
 
 ---
 
+## Reproducibility & Experiments
+
+All experiments are seed-controlled and reproducible. Use the exact pinned
+environment for matching numbers:
+
+```bash
+pip install -r requirements-lock.txt     # exact tested versions (Python 3.14)
+# or, for a looser install:
+pip install -r requirements.txt
+```
+
+Regenerate everything with one script:
+
+```bash
+./reproduce.sh            # full study (many QCNN trainings — slow)
+./reproduce.sh --quick    # fast smoke test that exercises the whole pipeline
+```
+
+### Ablation & multi-seed study
+A single harness runs the ablations across hard MNIST digit pairs and multiple
+seeds, then reports **mean ± std** for accuracy / precision / recall / F1 /
+ROC-AUC / PR-AUC, alongside classical baselines (logistic, MLP) trained on the
+**identical** split for a fair comparison:
+
+```bash
+python -m experiments.run_experiments \
+    --datasets 0,1 3,5 4,9 5,8 --seeds 0 1 2 3 4 --samples 400 --epochs 30
+# -> Results/experiments/summary.csv  (one row per dataset × config, mean ± std)
+```
+
+Ablation toggles (set in `QCNN/config/Qconfig.py` or via the runner):
+
+| Component | Flag | Variants |
+| :--- | :--- | :--- |
+| Pooling | `pooling_mode` | `unitary` (proposed) · `none` · `measurement` |
+| Conv entanglement | `conv_entanglement` | `full` · `one_diagonal` · `none` |
+| Kernel rotations | `kernel_rotations` | `su2` (proposed) · `ry` |
+| Encoding | `encoding_type` | `amplitude` · `feature_map` |
+
+### Metrics
+Every run computes the full metric suite via `QCNN/utils/metrics.py` and writes a
+`metrics.json`. A single training run also saves confusion-matrix, ROC, and
+precision-recall figures under `Results/Graphs/`.
+
+### Noise robustness (NISQ)
+Two free, local noise models — uniform depolarizing and a calibrated,
+IBM-hardware-like multi-channel model (depolarizing + amplitude/phase damping +
+readout error):
+
+```bash
+python noise_sim.py --noise-model depolarizing --classes 0 1
+python noise_sim.py --noise-model realistic    --classes 0 1
+```
+
+### Optional: real quantum hardware
+`experiments/hardware_run.py` runs the trained circuit on IBM Quantum's free
+Open Plan. It needs `pip install pennylane-qiskit qiskit-ibm-runtime` and a free
+token in `IBM_QUANTUM_TOKEN`; it skips cleanly if either is missing.
+
+---
+
 ## Citation & Contact
 **Author**: Aasa Singh Bhui  
 **Project**: Fully Quantum-Native QCNN  

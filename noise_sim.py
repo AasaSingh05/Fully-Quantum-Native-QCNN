@@ -158,11 +158,64 @@ def _unflatten_params(flat, n_conv, n_pool, n_qubits):
     return params
 
 
-def _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, noise_p):
+# Representative single-/two-qubit error rates for current IBM superconducting
+# hardware, used by the 'realistic' noise model (suggestion #9). These are
+# order-of-magnitude calibration figures, applied per gate; the sweep multiplies
+# them by an overall factor to show how accuracy degrades as hardware quality
+# changes. Free + reproducible — no cloud account or qiskit dependency required.
+IBM_BASE_NOISE = {
+    'depol_1q': 0.001,    # single-qubit gate depolarizing
+    'depol_2q': 0.010,    # two-qubit (CNOT) depolarizing
+    'amp_damp': 0.002,    # amplitude damping (T1 relaxation) per op
+    'phase_damp': 0.004,  # phase damping (T2 dephasing) per op
+    'readout': 0.020,     # measurement bit-flip on the readout qubit
+}
+
+
+def _build_noise_spec(noise_model, level):
+    """
+    Build a per-channel noise spec for a sweep point.
+
+    - 'depolarizing': uniform depolarizing of strength ``level`` on every wire
+      after every gate group (original behaviour). x-axis = probability p.
+    - 'realistic'   : IBM_BASE_NOISE scaled by ``level`` (a multiplier on
+      hardware base rates). x-axis = noise multiplier (×IBM base).
+    """
+    if noise_model == 'depolarizing':
+        return {'depol_1q': level, 'depol_2q': level,
+                'amp_damp': 0.0, 'phase_damp': 0.0, 'readout': 0.0}
+    elif noise_model == 'realistic':
+        return {k: v * level for k, v in IBM_BASE_NOISE.items()}
+    raise ValueError(f"Unknown noise_model '{noise_model}'. Use 'depolarizing' or 'realistic'.")
+
+
+def _apply_1q_noise(wires, spec):
+    """Apply single-qubit channels to each wire in ``wires``."""
+    for q in wires:
+        if spec.get('depol_1q', 0) > 0:
+            qml.DepolarizingChannel(spec['depol_1q'], wires=q)
+        if spec.get('amp_damp', 0) > 0:
+            qml.AmplitudeDamping(spec['amp_damp'], wires=q)
+        if spec.get('phase_damp', 0) > 0:
+            qml.PhaseDamping(spec['phase_damp'], wires=q)
+
+
+def _apply_2q_noise(a, b, spec):
+    """Apply a two-qubit-gate depolarizing error to both wires of a CNOT."""
+    if spec.get('depol_2q', 0) > 0:
+        qml.DepolarizingChannel(spec['depol_2q'], wires=a)
+        qml.DepolarizingChannel(spec['depol_2q'], wires=b)
+
+
+def _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, spec):
     from QCNN.layers.QConv import QuantumNativeConvolution
     from QCNN.layers.QPool import QuantumNativePooling
 
     dev = qml.device('default.mixed', wires=n_qubits)
+
+    def _cnot(a, b):
+        qml.CNOT(wires=[a, b])
+        _apply_2q_noise(a, b, spec)
 
     @qml.qnode(dev, interface='numpy')
     def circuit(x):
@@ -170,8 +223,7 @@ def _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, noise_p):
         all_qubits = list(range(n_qubits))
 
         qml.AmplitudeEmbedding(features=x, wires=all_qubits, normalize=True)
-        for q in all_qubits:
-            qml.DepolarizingChannel(noise_p, wires=q)
+        _apply_1q_noise(all_qubits, spec)
 
         active = all_qubits.copy()
         for layer in range(n_conv):
@@ -187,8 +239,7 @@ def _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, noise_p):
                     if max(win) < n_cur:
                         wires = [active[i] for i in win]
                         QuantumNativeConvolution.quantum_conv2d_kernel(kernel, wires)
-                        for q in wires:
-                            qml.DepolarizingChannel(noise_p, wires=q)
+                        _apply_1q_noise(wires, spec)
 
             if layer < n_conv - 1:
                 if len(active) < 2:
@@ -202,8 +253,7 @@ def _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, noise_p):
                     params[f'quantum_pooling_{layer}'],
                     input_qubits=keep, output_qubits=discard
                 )
-                for q in keep + discard:
-                    qml.DepolarizingChannel(noise_p, wires=q)
+                _apply_1q_noise(keep + discard, spec)
                 active = keep
 
         cp = params['quantum_classifier']
@@ -216,20 +266,22 @@ def _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, noise_p):
             qml.RZ(cp[(i * 2 + 8) % 32], wires=q)
 
         for i in range(n_a - 1):
-            qml.CNOT(wires=[active[i], active[i + 1]])
+            _cnot(active[i], active[i + 1])
         if n_a >= 2:
-            qml.CNOT(wires=[active[n_a - 1], active[0]])
+            _cnot(active[n_a - 1], active[0])
 
         for i, q in enumerate(active[:min(n_a, 4)]):
             qml.RX(cp[(i * 2 + 16) % 32], wires=q)
             qml.RY(cp[(i * 2 + 17) % 32], wires=q)
 
         if n_a >= 2:
-            qml.CNOT(wires=[active[0], active[min(n_a - 1, 1)]])
+            _cnot(active[0], active[min(n_a - 1, 1)])
         qml.RZ(cp[31], wires=readout)
 
-        for q in active:
-            qml.DepolarizingChannel(noise_p, wires=q)
+        _apply_1q_noise(active, spec)
+        # Readout (measurement) error on the readout qubit.
+        if spec.get('readout', 0) > 0:
+            qml.BitFlip(spec['readout'], wires=readout)
 
         return qml.expval(qml.PauliZ(readout))
 
@@ -245,7 +297,8 @@ def run_noise_simulation(
     image_size=28,
     n_samples=8000,
     classes=(0, 1),
-    max_test=200
+    max_test=200,
+    noise_model='depolarizing',
 ):
     np.random.seed(42)
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -310,20 +363,31 @@ def run_noise_simulation(
     print(f"  Flat params: {len(flat_params)}")
 
     # ── noise sweep ───────────────────────────────────────────────────────────
-    p_values  = [0.00, 0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.13, 0.15, 0.20]
+    print(f"\nNoise model: '{noise_model}'")
+    if noise_model == 'depolarizing':
+        levels = [0.00, 0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.13, 0.15, 0.20]
+        x_label = 'Depolarizing noise probability p'
+        level_fmt = lambda v: f"p={v:.2f}"
+    else:  # 'realistic'
+        levels = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0]
+        x_label = 'Noise multiplier (x IBM base rates)'
+        level_fmt = lambda v: f"{v:.1f}x"
+    p_values = levels  # alias kept for the plotting/summary code below
+
     real_accs = []
-    threshold = None  # calibrated once at p=0
+    threshold = None  # calibrated once at the zero-noise point
 
-    print("\nRunning noise sweep...")
-    print(f"  {'p':>6}  {'accuracy':>10}  {'theoretical':>12}")
-    print("  " + "-" * 34)
+    print("Running noise sweep...")
+    print(f"  {'level':>8}  {'accuracy':>10}")
+    print("  " + "-" * 24)
 
-    for p in p_values:
-        circuit = _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, p)
+    for p in levels:
+        spec = _build_noise_spec(noise_model, p)
+        circuit = _make_noisy_circuit(n_qubits, n_conv, n_pool, flat_params, spec)
         raw_outputs = np.array([float(circuit(xi)) for xi in X_test_proc])
 
-        # FIX 1: calibrate threshold once at p=0 using midpoint of class means
-        if p == 0.00:
+        # Calibrate the decision threshold once at the zero-noise point.
+        if p == levels[0]:
             class_pos_mean = float(np.mean(raw_outputs[y_test == 1]))
             class_neg_mean = float(np.mean(raw_outputs[y_test == -1]))
             threshold = (class_pos_mean + class_neg_mean) / 2.0
@@ -333,39 +397,36 @@ def run_noise_simulation(
         preds = np.where(raw_outputs > threshold, 1, -1)
         acc   = float(np.mean(preds == y_test))
         real_accs.append(acc)
-        print(f"  p={p:.2f}  acc={acc:.4f}  theoretical={(1 - p) * 0.945:.4f}")
+        print(f"  {level_fmt(p):>8}  acc={acc:.4f}")
 
     # ── plot ──────────────────────────────────────────────────────────────────
-    theo_accs = [(1 - p) * 0.945 for p in p_values]
+    base_acc = real_accs[0]
+    # Linear-attenuation reference curve, scaled from the clean baseline accuracy.
+    if noise_model == 'depolarizing':
+        theo_accs = [(1 - p) * base_acc for p in p_values]
+        theo_label = f'Linear reference: (1-p) x {base_acc:.3f}'
+        marker_x, marker_label = 0.05, 'NISQ threshold (p=0.05)'
+    else:
+        max_lv = max(p_values) or 1.0
+        theo_accs = [base_acc * (1 - 0.5 * p / max_lv) for p in p_values]
+        theo_label = 'Linear reference (illustrative)'
+        marker_x, marker_label = 1.0, 'Current IBM hardware (1x)'
 
-    # FIX 2: dynamic ylim so the real curve is always visible
+    # Dynamic ylim so the real curve is always visible.
     y_min = min(min(real_accs), min(theo_accs)) - 0.05
-    y_min = max(0.40, round(y_min, 1))  # floor at 0.40, snap to 1dp
+    y_min = max(0.40, round(y_min, 1))
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(p_values, theo_accs, 'b--o',
-            label='Theoretical: acc(p) = (1-p) \u00d7 0.945',
-            linewidth=2, markersize=6)
+    ax.plot(p_values, theo_accs, 'b--o', label=theo_label, linewidth=2, markersize=6)
     ax.plot(p_values, real_accs, 'r-s',
-            label='Experimental (depolarizing noise)',
-            linewidth=2, markersize=7)
-    ax.axvline(x=0.05, color='gray', linestyle=':', linewidth=1.5,
-               label='NISQ threshold (p=0.05)')
-    ax.set_xlabel('Depolarizing noise probability p', fontsize=12)
+            label=f'Experimental ({noise_model} noise)', linewidth=2, markersize=7)
+    ax.axvline(x=marker_x, color='gray', linestyle=':', linewidth=1.5, label=marker_label)
+    ax.set_xlabel(x_label, fontsize=12)
     ax.set_ylabel('Test accuracy', fontsize=12)
-    ax.set_title('FQCNN Noise Robustness: Experimental vs Theoretical', fontsize=13)
+    ax.set_title('FQCNN Noise Robustness: Experimental vs Reference', fontsize=13)
     ax.legend(fontsize=10)
-    ax.set_xlim(-0.005, 0.21)
     ax.set_ylim(y_min, 1.00)
     ax.grid(True, alpha=0.3)
-
-    # FIX 4: safe float comparison for annotations
-    annotate_at = [0.00, 0.05, 0.10, 0.20]
-    for p, acc in zip(p_values, real_accs):
-        if any(abs(p - a) < 1e-9 for a in annotate_at):
-            ax.annotate(f'{acc:.3f}', xy=(p, acc),
-                        xytext=(p + 0.005, acc + 0.008),
-                        fontsize=9, color='darkred')
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=200, bbox_inches='tight')
@@ -373,20 +434,32 @@ def run_noise_simulation(
     print(f"\nFigure saved to: {output_path}")
 
     print("\n-- Summary ----------------------------------------------------------")
-    idx05 = next(i for i, p in enumerate(p_values) if abs(p - 0.05) < 1e-9)
-    print(f"  Baseline (p=0):      real={real_accs[0]:.4f}  theoretical={theo_accs[0]:.4f}")
-    print(f"  NISQ (p=0.05):       real={real_accs[idx05]:.4f}  theoretical={theo_accs[idx05]:.4f}")
-    print(f"  High noise (p=0.20): real={real_accs[-1]:.4f}  theoretical={theo_accs[-1]:.4f}")
+    print(f"  Clean baseline:  real={real_accs[0]:.4f}")
+    print(f"  Highest noise:   real={real_accs[-1]:.4f}  (level={level_fmt(levels[-1])})")
     max_diff = max(abs(r - t) for r, t in zip(real_accs, theo_accs))
-    print(f"  Max deviation from theoretical: {max_diff:.4f}")
+    print(f"  Max deviation from linear reference: {max_diff:.4f}")
     print("---------------------------------------------------------------------")
 
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(description="FQCNN noise robustness simulation")
+    ap.add_argument('--noise-model', choices=['depolarizing', 'realistic'],
+                    default='depolarizing',
+                    help="'depolarizing' (uniform p sweep) or 'realistic' "
+                         "(calibrated IBM-like multi-channel model)")
+    ap.add_argument('--weights', default="Results/Weights/quantum_model_params.npz")
+    ap.add_argument('--image-size', type=int, default=28)
+    ap.add_argument('--n-samples', type=int, default=8000)
+    ap.add_argument('--classes', type=int, nargs=2, default=[0, 1])
+    args = ap.parse_args()
+
+    suffix = 'realistic' if args.noise_model == 'realistic' else 'depolarizing'
     run_noise_simulation(
-        weights_path="Results/Weights/quantum_model_params.npz",
-        output_path="Results/Graphs/fig6_noise_robustness_real.png",
-        image_size=28,
-        n_samples=8000,
-        classes=(0, 1)
+        weights_path=args.weights,
+        output_path=f"Results/Graphs/fig6_noise_robustness_{suffix}.png",
+        image_size=args.image_size,
+        n_samples=args.n_samples,
+        classes=tuple(args.classes),
+        noise_model=args.noise_model,
     )

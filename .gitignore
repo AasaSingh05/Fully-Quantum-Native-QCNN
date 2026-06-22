@@ -8,8 +8,8 @@ QCNN/*/__pycache__
 *.pyc
 
 #for testing and checking modules and snippets
-# implementationTests/
-# implementationTests/*
+implementationTests/
+implementationTests/*
 
 #Results
 # Results/*
