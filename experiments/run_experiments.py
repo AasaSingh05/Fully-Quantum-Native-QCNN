@@ -47,6 +47,7 @@ from QCNN.utils.metrics import (
     save_metrics_json,
 )
 from baselines.classical_cnn import run_classical_baselines
+from baselines.quantum_baselines import run_quantum_baselines
 
 DEFAULT_MNIST_DIR = os.path.join("datasets", "MNIST")
 EXP_ROOT = os.path.join("Results", "experiments")
@@ -175,6 +176,11 @@ def run_single(config_name: str, classes, seed: int, dataset_dir: str,
     if with_baselines and config_name == "proposed":
         base = run_classical_baselines(*split, seed=seed,
                                        target_params=metrics.get("n_params"))
+        # Quantum-architecture baselines (#1): published QCNN/TTN models on the
+        # IDENTICAL split / qubit count / optimiser budget as the proposed model.
+        base.update(run_quantum_baselines(
+            *split, seed=seed, n_qubits=cfg.n_qubits, n_epochs=cfg.n_epochs,
+            learning_rate=cfg.learning_rate, use_bce=use_bce))
         for name, bm in base.items():
             bdir = os.path.join(out_dir, f"baseline_{name}")
             os.makedirs(bdir, exist_ok=True)

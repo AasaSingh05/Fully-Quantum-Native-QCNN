@@ -9,7 +9,7 @@
   "tn": 13,
   "fp": 0,
   "fn": 13,
-  "prediction_bias": 0.15383401079506576,
-  "prediction_variance": 0.06877330205355786,
+  "prediction_bias": 0.15383401079506553,
+  "prediction_variance": 0.06877330205355779,
   "n_params": 260
 }

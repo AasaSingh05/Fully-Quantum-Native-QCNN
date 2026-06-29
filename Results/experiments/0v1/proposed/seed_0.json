@@ -10,6 +10,6 @@
   "fp": 0,
   "fn": 13,
   "prediction_bias": 0.03385070882992447,
-  "prediction_variance": 0.04190815661785349,
+  "prediction_variance": 0.041908156617853486,
   "n_params": 260
 }

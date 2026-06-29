@@ -124,7 +124,8 @@ Regenerate everything with one script:
 ### Ablation & multi-seed study
 A single harness runs the ablations across hard MNIST digit pairs and multiple
 seeds, then reports **mean ± std** for accuracy / precision / recall / F1 /
-ROC-AUC / PR-AUC, alongside classical baselines (logistic, MLP) trained on the
+ROC-AUC / PR-AUC, alongside both classical baselines (logistic, MLP) and
+published **quantum-architecture** baselines (see below), all trained on the
 **identical** split for a fair comparison:
 
 ```bash
@@ -141,6 +142,25 @@ Ablation toggles (set in `QCNN/config/Qconfig.py` or via the runner):
 | Conv entanglement | `conv_entanglement` | `full` · `one_diagonal` · `none` |
 | Kernel rotations | `kernel_rotations` | `su2` (proposed) · `ry` |
 | Encoding | `encoding_type` | `amplitude` · `feature_map` |
+
+### Quantum-architecture baselines
+To compare the proposed FQCNN against *existing* quantum architectures (not only
+classical models), the harness also trains three well-cited quantum classifiers
+on the **identical** amplitude-encoded representation, split, seed, optimiser and
+epoch budget (`baselines/quantum_baselines.py`). They appear automatically as
+extra rows in `summary.csv` (`baseline_cong`, `baseline_hur`, `baseline_ttn`),
+each reporting its own trainable-parameter count for a like-for-like comparison:
+
+| Row | Architecture | Reference |
+| :--- | :--- | :--- |
+| `baseline_cong` | Canonical QCNN (translationally-invariant conv + pooling) | Cong, Choi & Lukin, *Nature Physics* **15**, 1273 (2019) |
+| `baseline_hur` | QCNN with a more expressive two-qubit conv block | Hur, Kim & Park, *EPJ Quantum Technology* **9**, 1 (2022) |
+| `baseline_ttn` | Tree tensor network hierarchical classifier | Grant et al., *npj Quantum Information* **4**, 65 (2018) |
+
+```bash
+# train/evaluate the quantum baselines standalone on one MNIST pair (debugging)
+python -m baselines.quantum_baselines --classes 0 1 --samples 120 --epochs 15
+```
 
 ### Metrics
 Every run computes the full metric suite via `QCNN/utils/metrics.py` and writes a

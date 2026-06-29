@@ -5,7 +5,7 @@ Starting Training
 Epoch 1 Batch 1 | Loss: 0.718581 | Stats: min: -0.252, max: -0.056, mean: -0.109
 Epoch 1 Batch 2 | Loss: 0.673617
   [STABILITY] Test accuracy improved: 0.00% -> 50.00% (via EMA). Saving best params.
---- Epoch 1/2 | Loss: 0.6961 | Train Acc: 50.8% | Test Acc: 50.0% | CM: [TP:0, TN:13, FP:0, FN:13] | Progress: 50.0% | ETA: 19.0s ---
+--- Epoch 1/2 | Loss: 0.6961 | Train Acc: 50.8% | Test Acc: 50.0% | CM: [TP:0, TN:13, FP:0, FN:13] | Progress: 50.0% | ETA: 15.5s ---
 Epoch 2 Batch 1 | Loss: 0.659208 | Stats: min: -0.143, max: 0.038, mean: -0.035
 Epoch 2 Batch 2 | Loss: 0.646947
 --- Epoch 2/2 | Loss: 0.6531 | Train Acc: 50.8% | Test Acc: 50.0% | CM: [TP:0, TN:13, FP:0, FN:13] | Progress: 100.0% | ETA: 0.0s ---
