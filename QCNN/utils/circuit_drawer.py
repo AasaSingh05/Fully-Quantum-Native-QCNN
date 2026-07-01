@@ -151,9 +151,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate QCNN Circuit Diagrams')
     parser.add_argument('--output', type=str, default='Results/Graphs/Circuit_Architecture',
                         help='Output directory for diagrams')
-    parser.add_argument('--encoding', type=str, default='feature_map',
+    parser.add_argument('--encoding', type=str, default='amplitude',
                         choices=['feature_map', 'amplitude', 'patch'],
-                        help='Encoding type to visualize')
+                        help='Encoding type to visualize (default: amplitude, the encoding the model trains with)')
     
     args = parser.parse_args()
     
