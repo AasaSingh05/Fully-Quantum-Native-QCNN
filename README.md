@@ -1,7 +1,7 @@
-# Fully Quantum-Native QCNN 
-### High-Resolution Image Classification with 100% Quantum Operations
+# FQCNN: Fully Quantum-Native QCNN 
+### A Fully Quantum-Native Convolutional Neural Network with Coherent Unitary Pooling
 
-This repository implements a **fully quantum-native convolutional neural network (QCNN)** that performs encoding, convolution, pooling, and classification **entirely using quantum circuits**. Unlike hybrid models, this architecture contains no classical convolutional layers at any stage.
+This repository implements **FQCNN**, a **fully quantum-native convolutional neural network (QCNN)** that performs data encoding, local convolution, coherence-preserving unitary pooling, and classification **entirely using unitary quantum operations, with no intermediate measurements**. Unlike hybrid models, this architecture contains no classical convolutional layers at any stage.
 
 The project has evolved from a small 4x4 prototype to a robust framework capable of classifying **high-resolution images (e.g., 28x28 MNIST)** with over **95% accuracy** using advanced encoding strategies like **Amplitude Embedding** and **Patch-based Quanvolution**.
 
@@ -185,11 +185,24 @@ token in `IBM_QUANTUM_TOKEN`; it skips cleanly if either is missing.
 ---
 
 ## Citation & Contact
-**Author**: Aasa Singh Bhui  
-**Project**: Fully Quantum-Native QCNN  
-**GitHub**: [AasaSingh05](https://github.com/AasaSingh05)
+**Title**: FQCNN: A Fully Quantum-Native Convolutional Neural Network with Coherent Unitary Pooling  
+**Authors**: Aasa Singh Bhui, Prithvi Raghu (Vellore Institute of Technology)  
+**GitHub**: [AasaSingh05/Fully-Quantum-Native-QCNN](https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN)
 
-If you use this work, please cite the repository:
-```text
-https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN
+If you use this work, please cite it. Citation metadata is maintained in
+[`CITATION.cff`](CITATION.cff) — GitHub's **"Cite this repository"** button
+generates APA/BibTeX from it automatically.
+
+**Cite as:**
+> Singh Bhui, A., & Raghu, P. FQCNN: A Fully Quantum-Native Convolutional Neural Network with Coherent Unitary Pooling. https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN
+
+**BibTeX:**
+```bibtex
+@software{fqcnn,
+  title     = {FQCNN: A Fully Quantum-Native Convolutional Neural Network with Coherent Unitary Pooling},
+  author    = {Singh Bhui, Aasa and Raghu, Prithvi},
+  year      = {2025},
+  license   = {MIT},
+  url       = {https://github.com/AasaSingh05/Fully-Quantum-Native-QCNN}
+}
 ```
